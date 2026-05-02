@@ -6,6 +6,7 @@ import adminRoutes from "./modules/admin/admin.routes";
 import registrationRoutes from "./modules/registration/registration.routes";
 import favoriteRoutes from "./modules/favorite/favorite.routes";
 import notificationRoutes from "./modules/notification/notification.routes";
+import devRoutes from "./modules/dev/dev.routes";
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use("/admin", adminRoutes);
 app.use("/registrations", registrationRoutes);
 app.use("/favorites", favoriteRoutes);
 app.use("/notifications", notificationRoutes);
+app.use("/dev", devRoutes);
 
 
 app.use((err: any, req: any, res: any, next: any) => {
