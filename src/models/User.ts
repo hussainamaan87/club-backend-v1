@@ -29,6 +29,15 @@ const schema = new mongoose.Schema(
 
     dob: Date,
 
+fcmTokens: {
+
+  type: [String],
+
+  default: [],
+
+  index: true
+
+},
     gender: {
       type: String,
       enum: ["MALE", "FEMALE", "OTHER"]

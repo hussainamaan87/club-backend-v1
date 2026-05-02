@@ -14,3 +14,7 @@ export const updateProfile = (req: any, res: Response) =>
   service.updateProfile(req, res);
 
 export const updateProfileImage = service.updateProfileImage;
+
+export const saveFcmToken = service.saveFcmToken;
+
+

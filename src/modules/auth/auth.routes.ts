@@ -3,12 +3,15 @@ import {
   sendOtp,
   verifyOtp,
   getMe,
-  updateProfile
+  updateProfile,
+  saveFcmToken
 } from "./auth.controller";
 import { auth } from "../../middleware/auth.middleware";
 
 import { uploadUser } from "../../middleware/upload.middleware";
 import { updateProfileImage } from "./auth.service";
+import { error, success } from "../../utils/response";
+import User from "../../models/User";
 
 
 const router = express.Router();
@@ -28,5 +31,7 @@ router.patch(
   uploadUser.single("image"),
   updateProfileImage
 );
+
+router.post("/fcm-token", auth, saveFcmToken);
 
 export default router;

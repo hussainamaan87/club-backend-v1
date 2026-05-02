@@ -228,3 +228,26 @@ export const updateProfileImage = async (req: any, res: any) => {
     return error(res, "Failed");
   }
 };
+
+
+export const saveFcmToken = async (req: any, res: any) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) return error(res, "Token required");
+
+    const user: any = await User.findById(req.user.id);
+    if (!user) return error(res, "User not found");
+
+    // ✅ prevent duplicates
+    user.fcmTokens = [...new Set([...(user.fcmTokens || []), token])];
+
+    await user.save();
+
+    return success(res, "Token saved");
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};

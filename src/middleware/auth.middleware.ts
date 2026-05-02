@@ -17,9 +17,7 @@ export const auth = (req: any, res: any, next: any) => {
 
   try {
     const token = header.split(" ")[1];
-    if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET missing");
-}
+
 const data = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
 
     // 🔥 safety fallback

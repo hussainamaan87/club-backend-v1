@@ -5,6 +5,7 @@ import eventRoutes from "./modules/event/event.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import registrationRoutes from "./modules/registration/registration.routes";
 import favoriteRoutes from "./modules/favorite/favorite.routes";
+import notificationRoutes from "./modules/notification/notification.routes";
 
 const app = express();
 
@@ -18,16 +19,17 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use("/", (req, res) => {
-    res.json({
-        message: "Welcome to the Club App API"
-    });
+app.get("/", (req, res) => {
+  res.json({
+    message: "Welcome to the Club App API"
+  });
 });
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
 app.use("/admin", adminRoutes);
 app.use("/registrations", registrationRoutes);
 app.use("/favorites", favoriteRoutes);
+app.use("/notifications", notificationRoutes);
 
 
 app.use((err: any, req: any, res: any, next: any) => {
