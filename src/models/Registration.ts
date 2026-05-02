@@ -1,0 +1,45 @@
+import mongoose from "mongoose";
+
+const schema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true
+    },
+
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      required: true,
+      index: true
+    },
+
+    status: {
+      type: String,
+      enum: ["PENDING", "APPROVED", "REJECTED", "CHECKED_IN"],
+      default: "PENDING",
+      index: true
+    },
+
+    passCode: {
+      type: String,
+      index: true
+    },
+
+    used: {
+      type: Boolean,
+      default: false
+    }
+  },
+  { timestamps: true }
+);
+
+// 🔥 prevent duplicates
+schema.index({ userId: 1, eventId: 1 }, { unique: true });
+
+// 🔥 host panel queries
+schema.index({ eventId: 1, status: 1 });
+
+export default mongoose.model("Registration", schema);

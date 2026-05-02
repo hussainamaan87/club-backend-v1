@@ -1,0 +1,352 @@
+import mongoose from "mongoose";
+import Event from "../../models/Event";
+import User from "../../models/User";
+import Venue from "../../models/Venue";
+import Category from "../../models/Category";
+import Club from "../../models/Club";
+import { success, error } from "../../utils/response";
+import { getPagination } from "../../utils/pagination";
+import cloudinary from "../../utils/cloudinary";
+import Favorite from "../../models/Favorite";
+
+/* ================= GET EVENTS ================= */
+
+export const getEvents = async (req: any, res: any) => {
+  try {
+    const { page, limit, skip } = getPagination(req);
+
+    const filter: any = {};
+
+    if (req.query.cityId) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.cityId)) {
+        return error(res, "Invalid cityId");
+      }
+      filter.cityId = req.query.cityId;
+    }
+
+    if (req.query.categoryId) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.categoryId)) {
+        return error(res, "Invalid categoryId");
+      }
+      filter.categoryId = req.query.categoryId;
+    }
+
+    if (req.query.today === "true") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+
+      filter.startTime = { $gte: start, $lte: end };
+    } else if (req.query.upcoming !== "false") {
+      filter.startTime = { $gte: new Date() };
+    }
+
+    if (req.query.featured === "true") {
+      filter.isFeatured = true;
+    }
+
+    let sort: any = { startTime: 1 };
+
+    if (req.query.sort === "latest") {
+      sort = { createdAt: -1 };
+    } else if (req.query.sort === "trending") {
+      sort = { trendingScore: -1 };
+    } else if (req.query.sort === "featured") {
+      sort = { isFeatured: -1, startTime: 1 };
+    }
+
+    const [events, total] = await Promise.all([
+      Event.find(filter)
+        .sort(sort)
+        .populate("clubId", "name image")
+        .populate("cityId", "name")
+        .populate("venueId", "name")
+        .populate("categoryId", "name")
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      Event.countDocuments(filter)
+    ]);
+
+    // 🔥 FAVORITES LOGIC
+    let favSet = new Set<string>();
+
+    if (req.user?.id && events.length > 0) {
+      const favorites = await Favorite.find({
+        userId: req.user.id,
+        eventId: { $in: events.map(e => e._id) }
+      }).lean();
+
+      favSet = new Set(favorites.map(f => f.eventId.toString()));
+    }
+
+    const updatedEvents = events.map(e => ({
+      ...e,
+      isFavorited: favSet.has(e._id.toString())
+    }));
+
+    return success(res, "Events fetched", updatedEvents, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit)
+    });
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to fetch events");
+  }
+};
+
+/* ================= CREATE EVENT ================= */
+
+export const createEvent = async (req: any, res: any) => {
+  try {
+    const {
+      title,
+      desc,
+      clubId,
+      categoryId,
+      cityId,
+      venueId,
+      capacity,
+      startTime,
+      endTime,
+      hosts = []
+    } = req.body;
+
+    // 🔥 basic validation
+    if (
+      !title || !desc || !clubId || !categoryId ||
+      !cityId || !venueId || !capacity || !startTime || !endTime
+    ) {
+      return error(res, "Missing fields");
+    }
+
+    if (!Array.isArray(hosts) || hosts.length === 0) {
+      return error(res, "At least one host required");
+    }
+
+    // 🔥 dedupe hosts
+    const uniqueHosts = [...new Set(hosts)];
+
+    const ids = [clubId, categoryId, cityId, venueId, ...uniqueHosts];
+
+    for (const id of ids) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return error(res, "Invalid ID detected");
+      }
+    }
+
+    if (capacity <= 0) return error(res, "Invalid capacity");
+
+    if (new Date(startTime) >= new Date(endTime)) {
+      return error(res, "Invalid event timing");
+    }
+
+    // 🔥 validate entities
+    const [club, category, venue] = await Promise.all([
+      Club.findById(clubId),
+      Category.findById(categoryId),
+      Venue.findById(venueId)
+    ]);
+
+    if (!club) return error(res, "Invalid club");
+    if (!category) return error(res, "Invalid category");
+    if (!venue) return error(res, "Invalid venue");
+
+    if (venue.cityId.toString() !== cityId.toString()) {
+      return error(res, "Venue does not belong to city");
+    }
+
+    // 🔥 validate hosts
+    const hostUsers = await User.find({ _id: { $in: uniqueHosts } });
+
+    if (hostUsers.length !== uniqueHosts.length) {
+      return error(res, "Some hosts not found");
+    }
+
+    const invalidHost = hostUsers.find(
+      (u: any) => !u.roles?.includes("HOST")
+    );
+
+    if (invalidHost) {
+      return error(res, "Only HOST users allowed");
+    }
+
+    const event = await Event.create({
+      title,
+      desc,
+      clubId,
+      categoryId,
+      cityId,
+      venueId,
+      capacity,
+      remaining: capacity,
+      startTime,
+      endTime,
+      hosts: uniqueHosts,
+      createdBy: req.user.id
+    });
+
+    return success(res, "Event created", event);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Event creation failed");
+  }
+};
+
+/* ================= HOST EDIT ================= */
+
+export const hostEditEvent = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid event id");
+    }
+
+    const event: any = await Event.findById(id);
+    if (!event) return error(res, "Event not found");
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    const { desc, startTime, endTime, capacity } = req.body;
+
+    if (desc) event.desc = desc;
+
+    if (startTime && endTime) {
+      if (new Date(startTime) >= new Date(endTime)) {
+        return error(res, "Invalid timing");
+      }
+      event.startTime = startTime;
+      event.endTime = endTime;
+    }
+
+    if (capacity !== undefined) {
+      if (capacity <= 0) return error(res, "Invalid capacity");
+
+      const booked = event.capacity - event.remaining;
+
+      if (capacity < booked) {
+        return error(res, "Cannot reduce below booked seats");
+      }
+
+      const diff = capacity - event.capacity;
+      event.capacity = capacity;
+      event.remaining += diff;
+    }
+
+    await event.save();
+
+    return success(res, "Event updated", event);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to update event");
+  }
+};
+
+/* ================= UPDATE EVENT BANNER ================= */
+
+export const updateEventBanner = async (req: any, res: any) => {
+  try {
+    const event: any = await Event.findById(req.params.id);
+
+    if (!event) return error(res, "Event not found");
+    if (!req.file) return error(res, "Banner required");
+
+    if (event.bannerPublicId) {
+      await cloudinary.uploader.destroy(event.bannerPublicId).catch(() => {});
+    }
+
+    event.banner = req.file.path;
+    event.bannerPublicId = req.file.filename || req.file.public_id;
+
+    await event.save();
+
+    return success(res, "Event banner updated", event);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+
+/* ================= MY EVENTS ================= */
+
+export const getMyEvents = async (req: any, res: any) => {
+
+  try {
+
+    const events: any[] = await Event.find({
+
+      hosts: req.user.id
+
+    })
+
+      .populate("clubId", "name")
+
+      .populate("venueId", "name")
+
+      .populate("cityId", "name")
+
+      .sort({ startTime: 1 })
+
+      .lean();
+
+    // 🔥 If no events, return early (avoids unnecessary query)
+
+    if (events.length === 0) {
+
+      return success(res, "My events", []);
+
+    }
+
+    // 🔥 get favorites for these events
+
+    const favorites = await Favorite.find({
+
+      userId: req.user.id,
+
+      eventId: { $in: events.map(e => e._id) }
+
+    }).lean();
+
+    const favSet = new Set(
+
+      favorites.map(f => f.eventId.toString())
+
+    );
+
+    // 🔥 attach flag
+
+    const updatedEvents = events.map(e => ({
+
+      ...e,
+
+      isFavorited: favSet.has(e._id.toString())
+
+    }));
+
+    return success(res, "My events", updatedEvents);
+
+  } catch (err) {
+
+    console.error(err);
+
+    return error(res, "Failed to fetch events");
+
+  }
+
+};
