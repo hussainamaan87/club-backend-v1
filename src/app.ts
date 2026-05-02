@@ -18,7 +18,11 @@ app.use(cors({
 
 app.use(express.json());
 
-
+app.use("/", (req, res) => {
+    res.json({
+        message: "Welcome to the Club App API"
+    });
+});
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
 app.use("/admin", adminRoutes);
