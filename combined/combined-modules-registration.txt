@@ -1,0 +1,319 @@
+
+
+==============================
+FILE: registration.controller.ts
+==============================
+
+import * as service from "./registration.service";
+
+export const register = service.register;
+export const myRegistrations = service.myRegistrations;
+export const eventRegistrations = service.eventRegistrations;
+
+export const approve = service.approve;
+export const reject = service.reject;
+
+export const checkin = service.checkin;
+export const getQR = service.getQR;
+
+==============================
+FILE: registration.routes.ts
+==============================
+
+import express from "express";
+import { auth, allow } from "../../middleware/auth.middleware";
+import * as controller from "./registration.controller";
+
+const router = express.Router();
+
+/* ================= USER ================= */
+
+router.post("/", auth, controller.register);
+router.get("/my", auth, controller.myRegistrations);
+router.get("/:id/qr", auth, controller.getQR);
+
+/* ================= HOST ================= */
+
+router.get(
+  "/event/:eventId",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.eventRegistrations
+);
+
+router.post(
+  "/:id/approve",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.approve
+);
+
+router.post(
+  "/:id/reject",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.reject
+);
+
+router.post(
+  "/checkin/:code",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.checkin
+);
+
+export default router;
+
+==============================
+FILE: registration.service.ts
+==============================
+
+import Registration from "../../models/Registration";
+import Event from "../../models/Event";
+import { success, error } from "../../utils/response";
+import QRCode from "qrcode";
+import mongoose from "mongoose";
+
+/* ================= REGISTER ================= */
+
+export const register = async (req: any, res: any) => {
+  try {
+    const { eventId } = req.body;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return error(res, "Invalid eventId");
+    }
+
+    // 🔥 atomic seat decrement
+    const event = await Event.findOneAndUpdate(
+      { _id: eventId, remaining: { $gt: 0 } },
+      { $inc: { remaining: -1 } },
+      { new: true }
+    );
+
+    if (!event) return error(res, "Event full");
+
+    try {
+      await Registration.create({
+        userId: req.user.id,
+        eventId
+      });
+
+      return success(res, "Registration successful");
+
+    } catch (err: any) {
+      // 🔥 rollback seat
+      if (err.code === 11000) {
+        await Event.findByIdAndUpdate(eventId, {
+          $inc: { remaining: 1 }
+        });
+
+        return error(res, "Already registered");
+      }
+
+      throw err;
+    }
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Registration failed");
+  }
+};
+/* ================= MY REGISTRATIONS ================= */
+
+export const myRegistrations = async (req: any, res: any) => {
+  try {
+    const data = await Registration.find({ userId: req.user.id })
+      .populate("eventId")
+      .lean();
+
+    return success(res, "My registrations", data);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+
+/* ================= EVENT REGISTRATIONS ================= */
+
+export const eventRegistrations = async (req: any, res: any) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return error(res, "Invalid eventId");
+    }
+
+    const event: any = await Event.findById(eventId);
+
+    if (!event) return error(res, "Event not found");
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    const data = await Registration.find({ eventId })
+      .populate("userId", "name phone")
+      .lean();
+
+    return success(res, "Event registrations", data);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+
+/* ================= APPROVE ================= */
+
+export const approve = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const reg: any = await Registration.findById(id);
+    if (!reg) return error(res, "Not found");
+
+    if (reg.status !== "PENDING") {
+      return error(res, "Already processed");
+    }
+
+    const event: any = await Event.findById(reg.eventId);
+    if (!event) return error(res, "Event not found");
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    reg.status = "APPROVED";
+    reg.passCode = `EV-${event._id.toString().slice(-4)}-${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase()}`;
+
+    await reg.save();
+
+    return success(res, "Approved");
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Approval failed");
+  }
+};
+
+/* ================= REJECT ================= */
+
+export const reject = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const reg: any = await Registration.findById(id);
+    if (!reg) return error(res, "Not found");
+
+    if (reg.status !== "PENDING") {
+      return error(res, "Already processed");
+    }
+
+    const event: any = await Event.findById(reg.eventId);
+    if (!event) return error(res, "Event not found");
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    // 🔥 update both safely
+    reg.status = "REJECTED";
+    await reg.save();
+
+    await Event.findByIdAndUpdate(reg.eventId, {
+      $inc: { remaining: 1 }
+    });
+
+    return success(res, "Rejected");
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+
+/* ================= CHECK-IN ================= */
+
+export const checkin = async (req: any, res: any) => {
+  try {
+    const { code } = req.params;
+
+    const reg: any = await Registration.findOne({ passCode: code })
+      .populate("eventId");
+
+    if (!reg) return error(res, "Invalid pass");
+
+    const event: any = reg.eventId;
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    if (reg.used) return error(res, "Already used");
+    if (reg.status !== "APPROVED") return error(res, "Not approved");
+
+    reg.used = true;
+    reg.status = "CHECKED_IN";
+
+    await reg.save();
+
+    return success(res, "Check-in success");
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Check-in failed");
+  }
+};
+
+/* ================= QR ================= */
+
+export const getQR = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid id");
+    }
+
+    const reg: any = await Registration.findById(id).lean();
+
+    if (!reg) return error(res, "Registration not found");
+
+    if (reg.userId.toString() !== req.user.id) {
+      return error(res, "Not authorized");
+    }
+
+    if (!reg.passCode || reg.status !== "APPROVED") {
+      return error(res, "QR not available");
+    }
+
+    const qr = await QRCode.toDataURL(reg.passCode);
+
+    return success(res, "QR generated", { qr });
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to generate QR");
+  }
+};

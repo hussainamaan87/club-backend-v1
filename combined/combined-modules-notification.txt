@@ -1,0 +1,127 @@
+
+
+==============================
+FILE: notification.controller.ts
+==============================
+
+import Notification from "../../models/Notification";
+import { success, error } from "../../utils/response";
+
+/* ================= GET ================= */
+
+export const getMyNotifications = async (req: any, res: any) => {
+  try {
+    const data = await Notification.find({
+      userId: req.user.id
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    return success(res, "Notifications fetched", data);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+
+/* ================= MARK READ ================= */
+
+export const markRead = async (req: any, res: any) => {
+  try {
+    await Notification.updateMany(
+      { userId: req.user.id, isRead: false },
+      { isRead: true }
+    );
+
+    return success(res, "Marked as read");
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+
+==============================
+FILE: notification.routes.ts
+==============================
+
+import express from "express";
+import { auth } from "../../middleware/auth.middleware";
+import * as controller from "./notification.controller";
+
+const router = express.Router();
+
+router.get("/", auth, controller.getMyNotifications);
+router.patch("/read", auth, controller.markRead);
+
+export default router;
+
+==============================
+FILE: notification.service.ts
+==============================
+
+import Notification from "../../models/Notification";
+import User from "../../models/User";
+import admin from "../../utils/firebase";
+
+/* ================= SEND ================= */
+
+export const sendNotification = async ({
+  userId,
+  title,
+  body,
+  type,
+  data = {}
+}: any) => {
+  try {
+    const user: any = await User.findById(userId).lean();
+    if (!user) return;
+
+    // ✅ Save notification in DB (never block push)
+    await Notification.create({
+      userId,
+      title,
+      body,
+      type,
+      data
+    });
+
+    // ✅ No tokens → exit early
+    if (!user.fcmTokens || user.fcmTokens.length === 0) return;
+
+    // ✅ Convert data to string (FCM requirement)
+    const stringData = Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [k, String(v)])
+    );
+
+    // ✅ Send notifications (safe async loop)
+    for (const token of user.fcmTokens) {
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title, body },
+          data: stringData
+        })
+        .catch(err => {
+          console.error("FCM error:", err.message);
+
+          // 🔥 REMOVE INVALID TOKENS (important for prod)
+          if (
+            err.code === "messaging/registration-token-not-registered" ||
+            err.code === "messaging/invalid-registration-token"
+          ) {
+            User.updateOne(
+              { _id: userId },
+              { $pull: { fcmTokens: token } }
+            ).catch(() => {});
+          }
+        });
+    }
+
+  } catch (err) {
+    console.error("Notification failed", err);
+  }
+};

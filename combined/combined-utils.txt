@@ -1,0 +1,101 @@
+
+
+==============================
+FILE: cloudinary.ts
+==============================
+
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_KEY,
+  api_secret: process.env.CLOUD_SECRET
+});
+
+export default cloudinary;
+
+==============================
+FILE: firebase.ts
+==============================
+
+import admin from "firebase-admin";
+
+const firebaseConfig = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
+};
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(firebaseConfig as admin.ServiceAccount)
+  });
+}
+
+export default admin;
+
+==============================
+FILE: pagination.ts
+==============================
+
+export const getPagination = (req: any) => {
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip };
+};
+
+==============================
+FILE: response.ts
+==============================
+
+export const success = (
+  res: any,
+  message: string,
+  data: any = null,
+  meta: any = null
+) => {
+  return res.json({
+    success: true,
+    message,
+    data,
+    meta
+  });
+};
+
+export const error = (
+  res: any,
+  message: string,
+  code: number = 400
+) => {
+  return res.status(code).json({
+    success: false,
+    message
+  });
+};
+
+==============================
+FILE: telegram.ts
+==============================
+
+import axios from "axios";
+
+export const sendTelegram = async (text: string) => {
+  try {
+    await axios.post(
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        chat_id: process.env.TELEGRAM_CHAT_ID,
+        text
+      }
+    );
+  } catch (e) {
+    if (e instanceof Error) {
+      console.log("Telegram failed", e.message);
+    } else {
+      console.log("Telegram failed", e);
+    }
+  }
+};

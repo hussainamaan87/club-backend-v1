@@ -1,3 +1,9 @@
+
+
+==============================
+FILE: dev.routes.ts
+==============================
+
 import express from "express";
 import { auth } from "../../middleware/auth.middleware";
 import { sendNotification } from "../notification/notification.service";
@@ -11,9 +17,8 @@ router.post("/test", auth, async (req: any, res: any) => {
   try {
     await sendNotification({
       userId: req.user.id,
-title: req.body.title || "🔥 Test Notification",
-
-body: req.body.body || "If you see this, everything works 🚀",
+      title: "🔥 Test Notification",
+      body: "If you see this, everything works 🚀",
       type: "SYSTEM",
       data: {
         screen: "home"
