@@ -19,7 +19,10 @@ export const startCron = () => {
       });
 
       for (const reg of regs) {
-        await notifyEventReminder(reg.userId, event._id);
+        await notifyEventReminder(
+  reg.userId.toString(),
+  event._id.toString()
+);
       }
     }
   });
