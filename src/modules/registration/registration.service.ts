@@ -4,6 +4,13 @@ import { success, error } from "../../utils/response";
 import QRCode from "qrcode";
 import mongoose from "mongoose";
 
+/* 🔥 IMPORT NOTIFICATION ENGINE */
+import {
+  notifyRegistrationApproved,
+  notifyRegistrationRejected,
+  notifyCheckin
+} from "../notification/notification.engine";
+
 /* ================= REGISTER ================= */
 
 export const register = async (req: any, res: any) => {
@@ -14,7 +21,7 @@ export const register = async (req: any, res: any) => {
       return error(res, "Invalid eventId");
     }
 
-    // 🔥 atomic seat decrement
+    /* 🔥 ATOMIC SEAT BOOK */
     const event = await Event.findOneAndUpdate(
       { _id: eventId, remaining: { $gt: 0 } },
       { $inc: { remaining: -1 } },
@@ -32,7 +39,7 @@ export const register = async (req: any, res: any) => {
       return success(res, "Registration successful");
 
     } catch (err: any) {
-      // 🔥 rollback seat
+      /* 🔥 ROLLBACK SEAT */
       if (err.code === 11000) {
         await Event.findByIdAndUpdate(eventId, {
           $inc: { remaining: 1 }
@@ -49,6 +56,7 @@ export const register = async (req: any, res: any) => {
     return error(res, "Registration failed");
   }
 };
+
 /* ================= MY REGISTRATIONS ================= */
 
 export const myRegistrations = async (req: any, res: any) => {
@@ -123,6 +131,7 @@ export const approve = async (req: any, res: any) => {
       return error(res, "Not authorized");
     }
 
+    /* 🔥 UPDATE */
     reg.status = "APPROVED";
     reg.passCode = `EV-${event._id.toString().slice(-4)}-${Date.now()}-${Math.random()
       .toString(36)
@@ -130,6 +139,9 @@ export const approve = async (req: any, res: any) => {
       .toUpperCase()}`;
 
     await reg.save();
+
+    /* 🔥 NOTIFICATION (NON-BLOCKING) */
+    notifyRegistrationApproved(reg).catch(console.error);
 
     return success(res, "Approved");
 
@@ -163,13 +175,17 @@ export const reject = async (req: any, res: any) => {
       return error(res, "Not authorized");
     }
 
-    // 🔥 update both safely
+    /* 🔥 UPDATE */
     reg.status = "REJECTED";
     await reg.save();
 
+    /* 🔥 RETURN SEAT */
     await Event.findByIdAndUpdate(reg.eventId, {
       $inc: { remaining: 1 }
     });
+
+    /* 🔥 NOTIFICATION */
+    notifyRegistrationRejected(reg).catch(console.error);
 
     return success(res, "Rejected");
 
@@ -203,10 +219,14 @@ export const checkin = async (req: any, res: any) => {
     if (reg.used) return error(res, "Already used");
     if (reg.status !== "APPROVED") return error(res, "Not approved");
 
+    /* 🔥 UPDATE */
     reg.used = true;
     reg.status = "CHECKED_IN";
 
     await reg.save();
+
+    /* 🔥 NOTIFICATION */
+    notifyCheckin(reg).catch(console.error);
 
     return success(res, "Check-in success");
 

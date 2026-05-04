@@ -70,7 +70,8 @@ import { success, error } from "../../utils/response";
 import { getPagination } from "../../utils/pagination";
 import cloudinary from "../../utils/cloudinary";
 import Favorite from "../../models/Favorite";
-
+import { sendNotification } from "../notification/notification.service";
+import { notifyNewEvent } from "../notification/notification.manager";
 /* ================= GET EVENTS ================= */
 
 export const getEvents = async (req: any, res: any) => {
@@ -166,100 +167,190 @@ export const getEvents = async (req: any, res: any) => {
 /* ================= CREATE EVENT ================= */
 
 export const createEvent = async (req: any, res: any) => {
+
   try {
+
     const {
+
       title,
+
       desc,
+
       clubId,
+
       categoryId,
+
       cityId,
+
       venueId,
+
       capacity,
+
       startTime,
+
       endTime,
+
       hosts = []
+
     } = req.body;
 
     // 🔥 basic validation
+
     if (
+
       !title || !desc || !clubId || !categoryId ||
+
       !cityId || !venueId || !capacity || !startTime || !endTime
+
     ) {
+
       return error(res, "Missing fields");
+
     }
 
     if (!Array.isArray(hosts) || hosts.length === 0) {
+
       return error(res, "At least one host required");
+
     }
 
     // 🔥 dedupe hosts
+
     const uniqueHosts = [...new Set(hosts)];
 
     const ids = [clubId, categoryId, cityId, venueId, ...uniqueHosts];
 
     for (const id of ids) {
+
       if (!mongoose.Types.ObjectId.isValid(id)) {
+
         return error(res, "Invalid ID detected");
+
       }
+
     }
 
     if (capacity <= 0) return error(res, "Invalid capacity");
 
     if (new Date(startTime) >= new Date(endTime)) {
+
       return error(res, "Invalid event timing");
+
     }
 
     // 🔥 validate entities
+
     const [club, category, venue] = await Promise.all([
+
       Club.findById(clubId),
+
       Category.findById(categoryId),
+
       Venue.findById(venueId)
+
     ]);
 
     if (!club) return error(res, "Invalid club");
+
     if (!category) return error(res, "Invalid category");
+
     if (!venue) return error(res, "Invalid venue");
 
     if (venue.cityId.toString() !== cityId.toString()) {
+
       return error(res, "Venue does not belong to city");
+
     }
 
     // 🔥 validate hosts
+
     const hostUsers = await User.find({ _id: { $in: uniqueHosts } });
 
     if (hostUsers.length !== uniqueHosts.length) {
+
       return error(res, "Some hosts not found");
+
     }
 
     const invalidHost = hostUsers.find(
+
       (u: any) => !u.roles?.includes("HOST")
+
     );
 
     if (invalidHost) {
+
       return error(res, "Only HOST users allowed");
+
     }
 
+    /* ================= CREATE EVENT ================= */
+
     const event = await Event.create({
+
       title,
+
       desc,
+
       clubId,
+
       categoryId,
+
       cityId,
+
       venueId,
+
       capacity,
+
       remaining: capacity,
+
       startTime,
+
       endTime,
+
       hosts: uniqueHosts,
+
       createdBy: req.user.id
+
     });
+
+    /* ================= 🔔 NOTIFICATIONS ================= */
+
+    // Notify assigned hosts
+
+    for (const hostId of uniqueHosts) {
+
+      sendNotification({
+
+        userId: hostId.toString(), // 🔥 FIX ObjectId issue
+
+        title: "🎉 New Event Assigned",
+
+        body: `You are hosting "${title}"`,
+
+        type: "HOST_ASSIGNED",
+
+        data: {
+
+          eventId: event._id.toString()
+
+        }
+
+      }).catch(() => {}); // non-blocking
+
+    }
+    notifyNewEvent(event).catch(() => {});
 
     return success(res, "Event created", event);
 
   } catch (err) {
+
     console.error(err);
+
     return error(res, "Event creation failed");
+
   }
+
 };
 
 /* ================= HOST EDIT ================= */

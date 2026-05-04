@@ -97,6 +97,9 @@ import Category from "../../models/Category";
 import Event from "../../models/Event";
 import cloudinary from "../../utils/cloudinary";
 import { success, error } from "../../utils/response";
+import { sendNotification } from "../notification/notification.service";
+import Favorite from "../../models/Favorite";
+import { notifyEventUpdateToAll } from "../notification/notification.manager";
 
 /* ================= CITY ================= */
 
@@ -365,6 +368,19 @@ export const toggleFeatureEvent = async (req: any, res: any) => {
     event.isFeatured = !!req.body.isFeatured;
     await event.save();
 
+    // 🔔 NOTIFICATION (non-blocking)
+    if (event.isFeatured) {
+      for (const hostId of event.hosts || []) {
+        sendNotification({
+          userId: hostId.toString(),
+          title: "🔥 Event Featured",
+          body: `"${event.title}" is now featured`,
+          type: "EVENT_UPDATED",
+          data: { eventId: event._id }
+        }).catch(() => {});
+      }
+    }
+
     return success(res, "Feature updated", event);
   } catch (err) {
     console.error(err);
@@ -387,22 +403,29 @@ export const updateTrendingScore = async (req: any, res: any) => {
   }
 };
 
+
+
 export const adminEditEvent = async (req: any, res: any) => {
   try {
     const event: any = await Event.findById(req.params.id);
+
     if (!event) return error(res, "Event not found");
 
     Object.assign(event, req.body);
 
     await event.save();
 
+    /* ================= NOTIFICATIONS ================= */
+
+    notifyEventUpdateToAll(event).catch(() => {});
+
     return success(res, "Event updated", event);
+
   } catch (err) {
     console.error(err);
     return error(res, "Update failed");
   }
 };
-
 /* ================= SEARCH USERS ================= */
 
 export const searchUsers = async (req: any, res: any) => {
@@ -488,7 +511,6 @@ export const updateEventHosts = async (req: any, res: any) => {
     }
 
     const invalid = users.find(u => !u.roles.includes("HOST"));
-
     if (invalid) {
       return error(res, "Only HOST users allowed");
     }
@@ -498,6 +520,17 @@ export const updateEventHosts = async (req: any, res: any) => {
 
     event.hosts = hosts;
     await event.save();
+
+    // 🔔 NOTIFICATION (non-blocking)
+    for (const hostId of hosts) {
+      sendNotification({
+        userId: hostId,
+        title: "🎉 You are assigned as HOST",
+        body: `You are now a host for "${event.title}"`,
+        type: "HOST_ASSIGNED",
+        data: { eventId: event._id }
+      }).catch(() => {});
+    }
 
     return success(res, "Hosts updated", event);
 
@@ -586,7 +619,6 @@ import Otp from "../../models/Otp";
 import { success, error } from "../../utils/response";
 import { sendTelegram } from "../../utils/telegram";
 import { normalizePhone } from "./auth.utils";
-
 import cloudinary from "../../utils/cloudinary";
 
 /* ================= HELPERS ================= */
@@ -599,6 +631,7 @@ const hashOtp = (otp: string) =>
 export const sendOtp = async (req: any, res: any) => {
   try {
     const rawPhone = req.body.phone;
+
     if (!rawPhone) return error(res, "Phone required");
 
     const phone = normalizePhone(rawPhone);
@@ -607,7 +640,7 @@ export const sendOtp = async (req: any, res: any) => {
       return error(res, "Invalid phone");
     }
 
-    // ⛔ rate limit: 1 OTP per 60 sec
+    /* 🔥 RATE LIMIT (1 per 60 sec) */
     const recent = await Otp.findOne({
       phone,
       createdAt: { $gt: new Date(Date.now() - 60 * 1000) }
@@ -617,6 +650,7 @@ export const sendOtp = async (req: any, res: any) => {
       return error(res, "Wait before requesting another OTP");
     }
 
+    /* 🔥 CLEAN OLD OTPs */
     await Otp.deleteMany({ phone });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -630,7 +664,7 @@ export const sendOtp = async (req: any, res: any) => {
 
     console.log(`OTP for ${phone}: ${otp}`);
 
-    // 🔥 async send
+    /* 🔥 ASYNC SEND */
     sendTelegram(`OTP for ${phone}: ${otp}`).catch(() => {});
 
     return success(res, "OTP sent");
@@ -653,6 +687,11 @@ export const verifyOtp = async (req: any, res: any) => {
     }
 
     const phone = normalizePhone(rawPhone);
+
+    if (phone.length !== 12) {
+      return error(res, "Invalid phone");
+    }
+
     const hashedOtp = hashOtp(otp);
 
     const record: any = await Otp.findOne({
@@ -660,13 +699,18 @@ export const verifyOtp = async (req: any, res: any) => {
       otp: hashedOtp
     }).sort({ createdAt: -1 });
 
-    if (!record) return error(res, "Invalid OTP");
+    if (!record) {
+      return error(res, "Invalid OTP");
+    }
 
     if (record.expiresAt < new Date()) {
       return error(res, "OTP expired");
     }
 
+    /* 🔥 DELETE ALL OTPs AFTER SUCCESS */
     await Otp.deleteMany({ phone });
+
+    /* ================= USER ================= */
 
     let user: any = await User.findOne({ phone });
 
@@ -684,7 +728,7 @@ export const verifyOtp = async (req: any, res: any) => {
       }
     }
 
-    /* ===== JWT ===== */
+    /* ================= JWT ================= */
 
     if (!process.env.JWT_SECRET) {
       throw new Error("JWT_SECRET missing");
@@ -696,7 +740,9 @@ export const verifyOtp = async (req: any, res: any) => {
         roles: user.roles
       },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      {
+        expiresIn: "7d"
+      }
     );
 
     return success(res, "Login success", {
@@ -714,7 +760,7 @@ export const verifyOtp = async (req: any, res: any) => {
 export const getMe = async (req: any, res: any) => {
   try {
     const user = await User.findById(req.user.id).select(
-      "name phone roles dob gender bio"
+      "name phone roles dob gender bio image"
     );
 
     if (!user) return error(res, "User not found", 404);
@@ -727,6 +773,7 @@ export const getMe = async (req: any, res: any) => {
       dob: user.dob,
       gender: user.gender,
       bio: user.bio,
+      image: user.image,
       isAdmin: user.roles.includes("ADMIN"),
       isHost: user.roles.includes("HOST")
     });
@@ -785,6 +832,8 @@ export const updateProfile = async (req: any, res: any) => {
   }
 };
 
+/* ================= UPDATE PROFILE IMAGE ================= */
+
 export const updateProfileImage = async (req: any, res: any) => {
   try {
     const user: any = await User.findById(req.user.id);
@@ -792,6 +841,7 @@ export const updateProfileImage = async (req: any, res: any) => {
     if (!user) return error(res, "User not found");
     if (!req.file) return error(res, "Image required");
 
+    /* 🔥 DELETE OLD IMAGE */
     if (user.imagePublicId) {
       await cloudinary.uploader.destroy(user.imagePublicId).catch(() => {});
     }
@@ -804,12 +854,14 @@ export const updateProfileImage = async (req: any, res: any) => {
     return success(res, "Profile image updated", {
       image: user.image
     });
+
   } catch (err) {
     console.error(err);
     return error(res, "Failed");
   }
 };
 
+/* ================= SAVE FCM TOKEN ================= */
 
 export const saveFcmToken = async (req: any, res: any) => {
   try {
@@ -820,7 +872,7 @@ export const saveFcmToken = async (req: any, res: any) => {
     const user: any = await User.findById(req.user.id);
     if (!user) return error(res, "User not found");
 
-    // ✅ prevent duplicates
+    /* 🔥 PREVENT DUPLICATES */
     user.fcmTokens = [...new Set([...(user.fcmTokens || []), token])];
 
     await user.save();
@@ -865,8 +917,9 @@ router.post("/test", auth, async (req: any, res: any) => {
   try {
     await sendNotification({
       userId: req.user.id,
-      title: "🔥 Test Notification",
-      body: "If you see this, everything works 🚀",
+title: req.body.title || "🔥 Test Notification",
+
+body: req.body.body || "If you see this, everything works 🚀",
       type: "SYSTEM",
       data: {
         screen: "home"
@@ -982,7 +1035,8 @@ import { success, error } from "../../utils/response";
 import { getPagination } from "../../utils/pagination";
 import cloudinary from "../../utils/cloudinary";
 import Favorite from "../../models/Favorite";
-
+import { sendNotification } from "../notification/notification.service";
+import { notifyNewEvent } from "../notification/notification.manager";
 /* ================= GET EVENTS ================= */
 
 export const getEvents = async (req: any, res: any) => {
@@ -1078,100 +1132,190 @@ export const getEvents = async (req: any, res: any) => {
 /* ================= CREATE EVENT ================= */
 
 export const createEvent = async (req: any, res: any) => {
+
   try {
+
     const {
+
       title,
+
       desc,
+
       clubId,
+
       categoryId,
+
       cityId,
+
       venueId,
+
       capacity,
+
       startTime,
+
       endTime,
+
       hosts = []
+
     } = req.body;
 
     // 🔥 basic validation
+
     if (
+
       !title || !desc || !clubId || !categoryId ||
+
       !cityId || !venueId || !capacity || !startTime || !endTime
+
     ) {
+
       return error(res, "Missing fields");
+
     }
 
     if (!Array.isArray(hosts) || hosts.length === 0) {
+
       return error(res, "At least one host required");
+
     }
 
     // 🔥 dedupe hosts
+
     const uniqueHosts = [...new Set(hosts)];
 
     const ids = [clubId, categoryId, cityId, venueId, ...uniqueHosts];
 
     for (const id of ids) {
+
       if (!mongoose.Types.ObjectId.isValid(id)) {
+
         return error(res, "Invalid ID detected");
+
       }
+
     }
 
     if (capacity <= 0) return error(res, "Invalid capacity");
 
     if (new Date(startTime) >= new Date(endTime)) {
+
       return error(res, "Invalid event timing");
+
     }
 
     // 🔥 validate entities
+
     const [club, category, venue] = await Promise.all([
+
       Club.findById(clubId),
+
       Category.findById(categoryId),
+
       Venue.findById(venueId)
+
     ]);
 
     if (!club) return error(res, "Invalid club");
+
     if (!category) return error(res, "Invalid category");
+
     if (!venue) return error(res, "Invalid venue");
 
     if (venue.cityId.toString() !== cityId.toString()) {
+
       return error(res, "Venue does not belong to city");
+
     }
 
     // 🔥 validate hosts
+
     const hostUsers = await User.find({ _id: { $in: uniqueHosts } });
 
     if (hostUsers.length !== uniqueHosts.length) {
+
       return error(res, "Some hosts not found");
+
     }
 
     const invalidHost = hostUsers.find(
+
       (u: any) => !u.roles?.includes("HOST")
+
     );
 
     if (invalidHost) {
+
       return error(res, "Only HOST users allowed");
+
     }
 
+    /* ================= CREATE EVENT ================= */
+
     const event = await Event.create({
+
       title,
+
       desc,
+
       clubId,
+
       categoryId,
+
       cityId,
+
       venueId,
+
       capacity,
+
       remaining: capacity,
+
       startTime,
+
       endTime,
+
       hosts: uniqueHosts,
+
       createdBy: req.user.id
+
     });
+
+    /* ================= 🔔 NOTIFICATIONS ================= */
+
+    // Notify assigned hosts
+
+    for (const hostId of uniqueHosts) {
+
+      sendNotification({
+
+        userId: hostId.toString(), // 🔥 FIX ObjectId issue
+
+        title: "🎉 New Event Assigned",
+
+        body: `You are hosting "${title}"`,
+
+        type: "HOST_ASSIGNED",
+
+        data: {
+
+          eventId: event._id.toString()
+
+        }
+
+      }).catch(() => {}); // non-blocking
+
+    }
+    notifyNewEvent(event).catch(() => {});
 
     return success(res, "Event created", event);
 
   } catch (err) {
+
     console.error(err);
+
     return error(res, "Event creation failed");
+
   }
+
 };
 
 /* ================= HOST EDIT ================= */
@@ -1504,6 +1648,169 @@ export const markRead = async (req: any, res: any) => {
 };
 
 ==============================
+FILE: notification/notification.engine.ts
+==============================
+
+import { sendNotification } from "./notification.service";
+import { NotificationType } from "./notification.types";
+
+/* ================= REGISTRATION ================= */
+
+export const notifyRegistrationApproved = async (reg: any) => {
+  await sendNotification({
+    userId: reg.userId,
+    title: "✅ Registration Approved",
+    body: "You're confirmed for the event 🎉",
+    type: NotificationType.REGISTRATION_APPROVED,
+    data: {
+      eventId: reg.eventId,
+      screen: "event_detail"
+    }
+  });
+};
+
+export const notifyRegistrationRejected = async (reg: any) => {
+  await sendNotification({
+    userId: reg.userId,
+    title: "❌ Registration Rejected",
+    body: "Sorry, your request was not approved",
+    type: NotificationType.REGISTRATION_REJECTED,
+    data: {
+      eventId: reg.eventId
+    }
+  });
+};
+
+export const notifyCheckin = async (reg: any) => {
+  await sendNotification({
+    userId: reg.userId,
+    title: "🎟 Checked In",
+    body: "Welcome! Enjoy the event 🚀",
+    type: NotificationType.CHECKIN_SUCCESS,
+    data: {
+      eventId: reg.eventId
+    }
+  });
+};
+
+/* ================= EVENT ================= */
+
+export const notifyHostAssigned = async (userId: string, eventId: string) => {
+  await sendNotification({
+    userId,
+    title: "🎤 You're a host!",
+    body: "You have been assigned to an event",
+    type: NotificationType.HOST_ASSIGNED,
+    data: { eventId }
+  });
+};
+
+export const notifyEventUpdated = async (userId: string, eventId: string) => {
+  await sendNotification({
+    userId,
+    title: "⏰ Event Updated",
+    body: "Event timing/details changed",
+    type: NotificationType.EVENT_UPDATED,
+    data: { eventId }
+  });
+};
+
+export const notifyEventReminder = async (userId: string, eventId: string) => {
+  await sendNotification({
+    userId,
+    title: "⏳ Event Reminder",
+    body: "Your event starts soon!",
+    type: NotificationType.EVENT_REMINDER,
+    data: { eventId }
+  });
+};
+
+==============================
+FILE: notification/notification.manager.ts
+==============================
+
+import Favorite from "../../models/Favorite";
+import User from "../../models/User";
+import { sendNotification } from "./notification.service";
+
+/* ================= SYSTEM ================= */
+
+export const sendSystemNotification = async (
+  title: string,
+  body: string
+) => {
+  const users = await User.find().select("_id").lean();
+
+  for (const u of users) {
+    sendNotification({
+      userId: u._id.toString(),
+      title,
+      body,
+      type: "SYSTEM"
+    }).catch(() => {});
+  }
+};
+
+/* ================= NEW EVENT ================= */
+
+export const notifyNewEvent = async (event: any) => {
+  const users = await User.find().select("_id").lean();
+
+  for (const u of users) {
+    sendNotification({
+      userId: u._id.toString(),
+      title: "🎉 New Event",
+      body: `${event.title} is live now`,
+      type: "NEW_EVENT",
+      data: { eventId: event._id }
+    }).catch(() => {});
+  }
+};
+
+/* ================= EVENT UPDATE ================= */
+
+export const notifyEventUpdateToAll = async (event: any) => {
+  const userIds = new Set<string>();
+
+  // hosts
+  for (const h of event.hosts || []) {
+    userIds.add(h.toString());
+  }
+
+  // favorites
+  const favorites = await Favorite.find({ eventId: event._id }).lean();
+  for (const f of favorites) {
+    userIds.add(f.userId.toString());
+  }
+
+  for (const userId of userIds) {
+    sendNotification({
+      userId,
+      title: "📢 Event Updated",
+      body: `"${event.title}" has new updates`,
+      type: "EVENT_UPDATED",
+      data: { eventId: event._id }
+    }).catch(() => {});
+  }
+};
+
+/* ================= FAVORITE REMINDER ================= */
+
+export const notifyFavoriteUsers = async (event: any) => {
+  const favorites = await Favorite.find({ eventId: event._id }).lean();
+
+  for (const f of favorites) {
+    sendNotification({
+      userId: f.userId.toString(),
+      title: "⭐ Event Reminder",
+      body: `${event.title} starts soon`,
+      type: "FAVORITE_REMINDER",
+      data: { eventId: event._id }
+    }).catch(() => {});
+  }
+};
+
+==============================
 FILE: notification/notification.routes.ts
 ==============================
 
@@ -1526,6 +1833,16 @@ import Notification from "../../models/Notification";
 import User from "../../models/User";
 import admin from "../../utils/firebase";
 
+/* ================= TYPES ================= */
+
+interface SendNotificationParams {
+  userId: string;
+  title: string;
+  body: string;
+  type: string;
+  data?: Record<string, any>;
+}
+
 /* ================= SEND ================= */
 
 export const sendNotification = async ({
@@ -1534,12 +1851,13 @@ export const sendNotification = async ({
   body,
   type,
   data = {}
-}: any) => {
+}: SendNotificationParams) => {
   try {
+    /* ===== GET USER ===== */
     const user: any = await User.findById(userId).lean();
     if (!user) return;
 
-    // ✅ Save notification in DB (never block push)
+    /* ===== SAVE TO DB (IN-APP) ===== */
     await Notification.create({
       userId,
       title,
@@ -1548,43 +1866,72 @@ export const sendNotification = async ({
       data
     });
 
-    // ✅ No tokens → exit early
-    if (!user.fcmTokens || user.fcmTokens.length === 0) return;
+    /* ===== NO TOKENS → EXIT ===== */
+    if (!user.fcmTokens || user.fcmTokens.length === 0) {
+      return;
+    }
 
-    // ✅ Convert data to string (FCM requirement)
-    const stringData = Object.fromEntries(
-      Object.entries(data).map(([k, v]) => [k, String(v)])
-    );
+    /* ===== FCM DATA MUST BE STRING ===== */
+    const stringData: Record<string, string> = {};
 
-    // ✅ Send notifications (safe async loop)
-    for (const token of user.fcmTokens) {
+    for (const key in data) {
+      stringData[key] = String(data[key]);
+    }
+
+    /* ===== SEND TO ALL DEVICES ===== */
+    const promises = user.fcmTokens.map((token: string) =>
       admin
         .messaging()
         .send({
           token,
-          notification: { title, body },
-          data: stringData
+          notification: {
+            title,
+            body
+          },
+          data: stringData,
+          android: {
+            priority: "high"
+          }
         })
-        .catch(err => {
+        .catch(async (err: any) => {
           console.error("FCM error:", err.message);
 
-          // 🔥 REMOVE INVALID TOKENS (important for prod)
+          /* ===== REMOVE INVALID TOKENS ===== */
           if (
             err.code === "messaging/registration-token-not-registered" ||
             err.code === "messaging/invalid-registration-token"
           ) {
-            User.updateOne(
+            await User.updateOne(
               { _id: userId },
               { $pull: { fcmTokens: token } }
-            ).catch(() => {});
+            );
           }
-        });
-    }
+        })
+    );
+
+    await Promise.allSettled(promises);
 
   } catch (err) {
-    console.error("Notification failed", err);
+    console.error("Notification failed:", err);
   }
 };
+
+==============================
+FILE: notification/notification.types.ts
+==============================
+
+export const NotificationType = {
+  REGISTRATION_APPROVED: "REGISTRATION_APPROVED",
+  REGISTRATION_REJECTED: "REGISTRATION_REJECTED",
+  CHECKIN_SUCCESS: "CHECKIN_SUCCESS",
+
+  HOST_ASSIGNED: "HOST_ASSIGNED",
+  EVENT_UPDATED: "EVENT_UPDATED",
+  EVENT_REMINDER: "EVENT_REMINDER",
+
+  NEW_EVENT: "NEW_EVENT",
+  FAVORITE_REMINDER: "FAVORITE_REMINDER"
+} as const;
 
 ==============================
 FILE: registration/registration.controller.ts
@@ -1660,6 +2007,13 @@ import { success, error } from "../../utils/response";
 import QRCode from "qrcode";
 import mongoose from "mongoose";
 
+/* 🔥 IMPORT NOTIFICATION ENGINE */
+import {
+  notifyRegistrationApproved,
+  notifyRegistrationRejected,
+  notifyCheckin
+} from "../notification/notification.engine";
+
 /* ================= REGISTER ================= */
 
 export const register = async (req: any, res: any) => {
@@ -1670,7 +2024,7 @@ export const register = async (req: any, res: any) => {
       return error(res, "Invalid eventId");
     }
 
-    // 🔥 atomic seat decrement
+    /* 🔥 ATOMIC SEAT BOOK */
     const event = await Event.findOneAndUpdate(
       { _id: eventId, remaining: { $gt: 0 } },
       { $inc: { remaining: -1 } },
@@ -1688,7 +2042,7 @@ export const register = async (req: any, res: any) => {
       return success(res, "Registration successful");
 
     } catch (err: any) {
-      // 🔥 rollback seat
+      /* 🔥 ROLLBACK SEAT */
       if (err.code === 11000) {
         await Event.findByIdAndUpdate(eventId, {
           $inc: { remaining: 1 }
@@ -1705,6 +2059,7 @@ export const register = async (req: any, res: any) => {
     return error(res, "Registration failed");
   }
 };
+
 /* ================= MY REGISTRATIONS ================= */
 
 export const myRegistrations = async (req: any, res: any) => {
@@ -1779,6 +2134,7 @@ export const approve = async (req: any, res: any) => {
       return error(res, "Not authorized");
     }
 
+    /* 🔥 UPDATE */
     reg.status = "APPROVED";
     reg.passCode = `EV-${event._id.toString().slice(-4)}-${Date.now()}-${Math.random()
       .toString(36)
@@ -1786,6 +2142,9 @@ export const approve = async (req: any, res: any) => {
       .toUpperCase()}`;
 
     await reg.save();
+
+    /* 🔥 NOTIFICATION (NON-BLOCKING) */
+    notifyRegistrationApproved(reg).catch(console.error);
 
     return success(res, "Approved");
 
@@ -1819,13 +2178,17 @@ export const reject = async (req: any, res: any) => {
       return error(res, "Not authorized");
     }
 
-    // 🔥 update both safely
+    /* 🔥 UPDATE */
     reg.status = "REJECTED";
     await reg.save();
 
+    /* 🔥 RETURN SEAT */
     await Event.findByIdAndUpdate(reg.eventId, {
       $inc: { remaining: 1 }
     });
+
+    /* 🔥 NOTIFICATION */
+    notifyRegistrationRejected(reg).catch(console.error);
 
     return success(res, "Rejected");
 
@@ -1859,10 +2222,14 @@ export const checkin = async (req: any, res: any) => {
     if (reg.used) return error(res, "Already used");
     if (reg.status !== "APPROVED") return error(res, "Not approved");
 
+    /* 🔥 UPDATE */
     reg.used = true;
     reg.status = "CHECKED_IN";
 
     await reg.save();
+
+    /* 🔥 NOTIFICATION */
+    notifyCheckin(reg).catch(console.error);
 
     return success(res, "Check-in success");
 

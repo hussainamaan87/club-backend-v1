@@ -7,6 +7,9 @@ import Category from "../../models/Category";
 import Event from "../../models/Event";
 import cloudinary from "../../utils/cloudinary";
 import { success, error } from "../../utils/response";
+import { sendNotification } from "../notification/notification.service";
+import Favorite from "../../models/Favorite";
+import { notifyEventUpdateToAll } from "../notification/notification.manager";
 
 /* ================= CITY ================= */
 
@@ -275,6 +278,19 @@ export const toggleFeatureEvent = async (req: any, res: any) => {
     event.isFeatured = !!req.body.isFeatured;
     await event.save();
 
+    // 🔔 NOTIFICATION (non-blocking)
+    if (event.isFeatured) {
+      for (const hostId of event.hosts || []) {
+        sendNotification({
+          userId: hostId.toString(),
+          title: "🔥 Event Featured",
+          body: `"${event.title}" is now featured`,
+          type: "EVENT_UPDATED",
+          data: { eventId: event._id }
+        }).catch(() => {});
+      }
+    }
+
     return success(res, "Feature updated", event);
   } catch (err) {
     console.error(err);
@@ -297,22 +313,29 @@ export const updateTrendingScore = async (req: any, res: any) => {
   }
 };
 
+
+
 export const adminEditEvent = async (req: any, res: any) => {
   try {
     const event: any = await Event.findById(req.params.id);
+
     if (!event) return error(res, "Event not found");
 
     Object.assign(event, req.body);
 
     await event.save();
 
+    /* ================= NOTIFICATIONS ================= */
+
+    notifyEventUpdateToAll(event).catch(() => {});
+
     return success(res, "Event updated", event);
+
   } catch (err) {
     console.error(err);
     return error(res, "Update failed");
   }
 };
-
 /* ================= SEARCH USERS ================= */
 
 export const searchUsers = async (req: any, res: any) => {
@@ -398,7 +421,6 @@ export const updateEventHosts = async (req: any, res: any) => {
     }
 
     const invalid = users.find(u => !u.roles.includes("HOST"));
-
     if (invalid) {
       return error(res, "Only HOST users allowed");
     }
@@ -408,6 +430,17 @@ export const updateEventHosts = async (req: any, res: any) => {
 
     event.hosts = hosts;
     await event.save();
+
+    // 🔔 NOTIFICATION (non-blocking)
+    for (const hostId of hosts) {
+      sendNotification({
+        userId: hostId,
+        title: "🎉 You are assigned as HOST",
+        body: `You are now a host for "${event.title}"`,
+        type: "HOST_ASSIGNED",
+        data: { eventId: event._id }
+      }).catch(() => {});
+    }
 
     return success(res, "Hosts updated", event);
 

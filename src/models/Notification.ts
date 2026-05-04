@@ -1,5 +1,17 @@
 import mongoose from "mongoose";
 
+export const NotificationTypes = [
+  "REGISTRATION_APPROVED",
+  "REGISTRATION_REJECTED",
+  "CHECKIN_SUCCESS",
+  "HOST_ASSIGNED",
+  "EVENT_UPDATED",
+  "EVENT_REMINDER",
+  "NEW_EVENT",
+  "FAVORITE_REMINDER",
+  "SYSTEM"
+] as const;
+
 const schema = new mongoose.Schema(
   {
     userId: {
@@ -21,12 +33,14 @@ const schema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["EVENT", "REGISTRATION", "SYSTEM"],
+      enum: NotificationTypes,
+      required: true,
       index: true
     },
 
     data: {
-      type: Object
+      type: Object,
+      default: {}
     },
 
     isRead: {
