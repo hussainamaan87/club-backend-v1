@@ -40,18 +40,16 @@ export const sendNotification = async ({
       return;
     }
 
-    /* ===== FCM DATA MUST BE STRING ===== */
+    /* ===== CONVERT DATA TO STRING ===== */
     const stringData: Record<string, string> = {};
-
     for (const key in data) {
       stringData[key] = String(data[key]);
     }
 
-    /* ===== SEND TO ALL DEVICES ===== */
-    const promises = user.fcmTokens.map((token: string) =>
-      admin
-        .messaging()
-        .send({
+    /* ===== SEND NOTIFICATIONS ===== */
+    const promises = user.fcmTokens.map(async (token: string) => {
+      try {
+        await admin.messaging().send({
           token,
           notification: {
             title,
@@ -61,22 +59,30 @@ export const sendNotification = async ({
           android: {
             priority: "high"
           }
-        })
-        .catch(async (err: any) => {
-          console.error("FCM error:", err.message);
+        });
+      } catch (err: any) {
+        console.error("FCM error:", err.message);
 
-          /* ===== REMOVE INVALID TOKENS ===== */
-          if (
-            err.code === "messaging/registration-token-not-registered" ||
-            err.code === "messaging/invalid-registration-token"
-          ) {
-            await User.updateOne(
-              { _id: userId },
-              { $pull: { fcmTokens: token } }
-            );
-          }
-        })
-    );
+        /* ===== HANDLE INVALID TOKENS ===== */
+        const invalidErrors = [
+          "messaging/registration-token-not-registered",
+          "messaging/invalid-registration-token",
+          "messaging/unknown-error"
+        ];
+
+        if (
+          invalidErrors.includes(err.code) ||
+          err.message?.includes("Requested entity was not found")
+        ) {
+          console.log("🧹 Removing invalid FCM token:", token);
+
+          await User.updateOne(
+            { _id: userId },
+            { $pull: { fcmTokens: token } }
+          );
+        }
+      }
+    });
 
     await Promise.allSettled(promises);
 
