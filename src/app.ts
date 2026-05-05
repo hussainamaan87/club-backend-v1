@@ -7,6 +7,8 @@ import registrationRoutes from "./modules/registration/registration.routes";
 import favoriteRoutes from "./modules/favorite/favorite.routes";
 import notificationRoutes from "./modules/notification/notification.routes";
 import devRoutes from "./modules/dev/dev.routes";
+import multer from "multer";
+
 
 const app = express();
 
@@ -34,8 +36,26 @@ app.use("/notifications", notificationRoutes);
 app.use("/dev", devRoutes);
 
 
+
 app.use((err: any, req: any, res: any, next: any) => {
   console.error(err);
+
+  // ✅ HANDLE MULTER ERRORS
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      success: false,
+      message: err.message
+    });
+  }
+
+  // ✅ HANDLE FILE FILTER ERROR
+  if (err.message === "Only image files allowed") {
+    return res.status(400).json({
+      success: false,
+      message: err.message
+    });
+  }
+
   res.status(500).json({
     success: false,
     message: "Internal Server Error"

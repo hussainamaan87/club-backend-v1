@@ -274,10 +274,10 @@ export const createEvent = async (req: any, res: any) => {
 
         }
 
-      }).catch(() => {}); // non-blocking
+      }).catch(() => { }); // non-blocking
 
     }
-    notifyNewEvent(event).catch(() => {});
+    notifyNewEvent(event).catch(() => { });
 
     return success(res, "Event created", event);
 
@@ -357,8 +357,12 @@ export const updateEventBanner = async (req: any, res: any) => {
     if (!event) return error(res, "Event not found");
     if (!req.file) return error(res, "Banner required");
 
+    if (!req.file.mimetype.startsWith("image/")) {
+      return error(res, "Only image files allowed");
+    }
+
     if (event.bannerPublicId) {
-      await cloudinary.uploader.destroy(event.bannerPublicId).catch(() => {});
+      await cloudinary.uploader.destroy(event.bannerPublicId).catch(() => { });
     }
 
     event.banner = req.file.path;

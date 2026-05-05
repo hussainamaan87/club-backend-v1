@@ -15,19 +15,17 @@ import { notifyEventUpdateToAll } from "../notification/notification.manager";
 
 export const createCity = async (req: any, res: any) => {
   try {
-    const name = req.body.name?.trim();
+    const name = req.body.name?.trim().toLowerCase();
     if (!name) return error(res, "Name required");
-
-    const existing = await City.findOne({
-      name: { $regex: `^${name}$`, $options: "i" }
-    });
-
-    if (existing) return error(res, "City already exists");
 
     const city = await City.create({ name });
 
     return success(res, "City created", city);
-  } catch (err) {
+
+  } catch (err: any) {
+    if (err.code === 11000) {
+      return error(res, "City already exists");
+    }
     console.error(err);
     return error(res, "City creation failed");
   }
@@ -55,8 +53,14 @@ export const createVenue = async (req: any, res: any) => {
       return error(res, "Invalid cityId");
     }
 
-    const city = await City.findById(cityId);
-    if (!city) return error(res, "City not found");
+    const exists = await Venue.findOne({
+      name: { $regex: `^${name.trim()}$`, $options: "i" },
+      cityId
+    });
+
+    if (exists) {
+      return error(res, "Venue already exists in this city");
+    }
 
     const venue = await Venue.create({
       name: name.trim(),
@@ -64,12 +68,12 @@ export const createVenue = async (req: any, res: any) => {
     });
 
     return success(res, "Venue created", venue);
+
   } catch (err) {
     console.error(err);
     return error(res, "Venue creation failed");
   }
 };
-
 export const getVenues = async (req: any, res: any) => {
   try {
     const venues = await Venue.find().populate("cityId").lean();
@@ -89,6 +93,11 @@ export const createClub = async (req: any, res: any) => {
 
     if (!name) return error(res, "Name required");
 
+        if (file && !file.mimetype.startsWith("image/")) {
+
+      return error(res, "Only image files allowed");
+
+    }
     if (categoryId) {
       if (!mongoose.Types.ObjectId.isValid(categoryId)) {
         return error(res, "Invalid categoryId");
@@ -162,7 +171,7 @@ export const updateUserRole = async (req: any, res: any) => {
     const allowedRoles = ["ADMIN", "HOST", "USER"];
 
     if (!Array.isArray(roles)) {
-      return error(res, "Roles must be an array");
+      return error(res, "Roles must be array");
     }
 
     const filtered = roles.filter((r: string) =>
@@ -176,16 +185,24 @@ export const updateUserRole = async (req: any, res: any) => {
     const user = await User.findById(req.params.id);
     if (!user) return error(res, "User not found");
 
+    // 🔥 prevent self-remove admin
+    if (
+      req.user.id === user._id.toString() &&
+      !filtered.includes("ADMIN")
+    ) {
+      return error(res, "Cannot remove your own ADMIN role");
+    }
+
     user.roles = [...new Set(filtered)];
     await user.save();
 
     return success(res, "Roles updated", user);
+
   } catch (err) {
     console.error(err);
     return error(res, "Failed to update roles");
   }
 };
-
 /* ================= CLUB IMAGE ================= */
 
 export const updateClubImage = async (req: any, res: any) => {
@@ -194,6 +211,12 @@ export const updateClubImage = async (req: any, res: any) => {
 
     if (!club) return error(res, "Club not found");
     if (!req.file) return error(res, "Image required");
+
+        if (!req.file.mimetype.startsWith("image/")) {
+
+      return error(res, "Only image files allowed");
+
+    }
 
     if (club.imagePublicId) {
       await cloudinary.uploader.destroy(club.imagePublicId).catch(() => {});
@@ -220,6 +243,10 @@ export const updateClubBanner = async (req: any, res: any) => {
     if (!club) return error(res, "Club not found");
     if (!req.file) return error(res, "Banner required");
 
+    if (!req.file.mimetype.startsWith("image/")) {
+      return error(res, "Only image files allowed");
+    }    
+
     if (club.bannerPublicId) {
       await cloudinary.uploader.destroy(club.bannerPublicId).catch(() => {});
     }
@@ -240,19 +267,17 @@ export const updateClubBanner = async (req: any, res: any) => {
 
 export const createCategory = async (req: any, res: any) => {
   try {
-    const name = req.body.name?.trim();
+    const name = req.body.name?.trim().toLowerCase();
     if (!name) return error(res, "Name required");
-
-    const exists = await Category.findOne({
-      name: { $regex: `^${name}$`, $options: "i" }
-    });
-
-    if (exists) return error(res, "Category exists");
 
     const category = await Category.create({ name });
 
     return success(res, "Category created", category);
-  } catch (err) {
+
+  } catch (err: any) {
+    if (err.code === 11000) {
+      return error(res, "Category already exists");
+    }
     console.error(err);
     return error(res, "Failed to create category");
   }
@@ -438,18 +463,26 @@ export const updateVenue = async (req: any, res: any) => {
 };
 
 
-
 export const adminEditEvent = async (req: any, res: any) => {
   try {
     const event: any = await Event.findById(req.params.id);
-
     if (!event) return error(res, "Event not found");
 
-    Object.assign(event, req.body);
+    const allowedFields = [
+      "title",
+      "desc",
+      "startTime",
+      "endTime",
+      "capacity"
+    ];
+
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        event[key] = req.body[key];
+      }
+    }
 
     await event.save();
-
-    /* ================= NOTIFICATIONS ================= */
 
     notifyEventUpdateToAll(event).catch(() => {});
 
@@ -466,15 +499,16 @@ export const searchUsers = async (req: any, res: any) => {
   try {
     const { phone, name } = req.query;
 
-    const filter: any = {};
+    const search = phone || name;
 
-    if (phone) {
-      filter.phone = { $regex: phone, $options: "i" };
-    }
-
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
+    const filter = search
+      ? {
+          $or: [
+            { phone: { $regex: search, $options: "i" } },
+            { name: { $regex: search, $options: "i" } }
+          ]
+        }
+      : {};
 
     const users = await User.find(filter)
       .select("name phone roles")
