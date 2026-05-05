@@ -391,9 +391,8 @@ export const updateVenue = async (req: any, res: any) => {
     const venue: any = await Venue.findById(id);
     if (!venue) return error(res, "Venue not found");
 
-    if (name) {
-      venue.name = name.trim();
-    }
+    /* ================= HANDLE CITY CHANGE ================= */
+    let finalCityId = venue.cityId;
 
     if (cityId) {
       if (!mongoose.Types.ObjectId.isValid(cityId)) {
@@ -403,12 +402,35 @@ export const updateVenue = async (req: any, res: any) => {
       const city = await City.findById(cityId);
       if (!city) return error(res, "City not found");
 
+      finalCityId = cityId;
+    }
+
+    /* ================= HANDLE NAME ================= */
+    if (name) {
+      const trimmedName = name.trim();
+
+      const exists = await Venue.findOne({
+        _id: { $ne: id },
+        name: { $regex: `^${trimmedName}$`, $options: "i" },
+        cityId: finalCityId
+      });
+
+      if (exists) {
+        return error(res, "Venue already exists in this city");
+      }
+
+      venue.name = trimmedName;
+    }
+
+    /* ================= APPLY CITY UPDATE ================= */
+    if (cityId) {
       venue.cityId = cityId;
     }
 
     await venue.save();
 
     return success(res, "Venue updated", venue);
+
   } catch (err) {
     console.error(err);
     return error(res, "Failed to update venue");
