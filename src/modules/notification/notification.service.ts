@@ -2,8 +2,6 @@ import Notification from "../../models/Notification";
 import User from "../../models/User";
 import admin from "../../utils/firebase";
 
-/* ================= TYPES ================= */
-
 interface SendNotificationParams {
   userId: string;
   title: string;
@@ -11,8 +9,6 @@ interface SendNotificationParams {
   type: string;
   data?: Record<string, any>;
 }
-
-/* ================= SEND ================= */
 
 export const sendNotification = async ({
   userId,
@@ -26,7 +22,7 @@ export const sendNotification = async ({
     const user: any = await User.findById(userId).lean();
     if (!user) return;
 
-    /* ===== SAVE TO DB (IN-APP) ===== */
+    /* ===== SAVE IN-APP ===== */
     await Notification.create({
       userId,
       title,
@@ -35,56 +31,58 @@ export const sendNotification = async ({
       data
     });
 
-    /* ===== NO TOKENS → EXIT ===== */
-    if (!user.fcmTokens || user.fcmTokens.length === 0) {
-      return;
-    }
+    /* ===== NO TOKENS ===== */
+    if (!user.fcmTokens || user.fcmTokens.length === 0) return;
 
-    /* ===== CONVERT DATA TO STRING ===== */
+    /* ===== LIMIT TOKENS (IMPORTANT) ===== */
+    const tokens: string[] = user.fcmTokens.slice(0, 5);
+
+    /* ===== CONVERT DATA ===== */
     const stringData: Record<string, string> = {};
     for (const key in data) {
       stringData[key] = String(data[key]);
     }
 
-    /* ===== SEND NOTIFICATIONS ===== */
-    const promises = user.fcmTokens.map(async (token: string) => {
-      try {
-        await admin.messaging().send({
-          token,
-          notification: {
-            title,
-            body
-          },
-          data: stringData,
-          android: {
-            priority: "high"
-          }
-        });
-      } catch (err: any) {
-        console.error("FCM error:", err.message);
+    /* ===== MULTICAST SEND ===== */
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title,
+        body
+      },
+      data: stringData,
+      android: {
+        priority: "high"
+      }
+    });
 
-        /* ===== HANDLE INVALID TOKENS ===== */
+    /* ===== CLEAN INVALID TOKENS ===== */
+    const tokensToRemove: string[] = [];
+
+    response.responses.forEach((res, index) => {
+      if (!res.success) {
+        const code = (res.error as any)?.code;
+
         const invalidErrors = [
           "messaging/registration-token-not-registered",
           "messaging/invalid-registration-token",
           "messaging/unknown-error"
         ];
 
-        if (
-          invalidErrors.includes(err.code) ||
-          err.message?.includes("Requested entity was not found")
-        ) {
-          console.log("🧹 Removing invalid FCM token:", token);
-
-          await User.updateOne(
-            { _id: userId },
-            { $pull: { fcmTokens: token } }
-          );
+        if (invalidErrors.includes(code)) {
+          tokensToRemove.push(tokens[index]);
         }
       }
     });
 
-    await Promise.allSettled(promises);
+    if (tokensToRemove.length > 0) {
+      console.log("🧹 Removing invalid tokens:", tokensToRemove);
+
+      await User.updateOne(
+        { _id: userId },
+        { $pull: { fcmTokens: { $in: tokensToRemove } } }
+      );
+    }
 
   } catch (err) {
     console.error("Notification failed:", err);

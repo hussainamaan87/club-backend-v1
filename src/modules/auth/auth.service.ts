@@ -258,13 +258,21 @@ export const saveFcmToken = async (req: any, res: any) => {
     const user: any = await User.findById(req.user.id);
     if (!user) return error(res, "User not found");
 
-    /* 🔥 PREVENT DUPLICATES */
-    user.fcmTokens = [...new Set([...(user.fcmTokens || []), token])];
+    // 🔥 REMOVE DUPLICATE
+    let tokens = user.fcmTokens || [];
+    tokens = tokens.filter((t: string) => t !== token);
+
+    // 🔥 ADD NEW TOKEN AT FRONT
+    tokens.unshift(token);
+
+    // 🔥 LIMIT TO LAST 5 DEVICES
+    tokens = tokens.slice(0, 5);
+
+    user.fcmTokens = tokens;
 
     await user.save();
 
     return success(res, "Token saved");
-
   } catch (err) {
     console.error(err);
     return error(res, "Failed");
