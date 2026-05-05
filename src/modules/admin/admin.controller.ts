@@ -30,3 +30,8 @@ export const updateTrendingScore = service.updateTrendingScore;
 export const adminEditEvent = service.adminEditEvent;
 
 export const updateEventHosts = service.updateEventHosts;
+
+/* ================= UPDATE ================= */
+export const updateCity = service.updateCity;
+export const updateCategory = service.updateCategory;
+export const updateVenue = service.updateVenue;

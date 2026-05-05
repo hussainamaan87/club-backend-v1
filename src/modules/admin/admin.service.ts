@@ -313,6 +313,108 @@ export const updateTrendingScore = async (req: any, res: any) => {
   }
 };
 
+export const updateCity = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const name = req.body.name?.trim();
+
+    if (!name) return error(res, "Name required");
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid city id");
+    }
+
+    const exists = await City.findOne({
+      _id: { $ne: id },
+      name: { $regex: `^${name}$`, $options: "i" }
+    });
+
+    if (exists) return error(res, "City already exists");
+
+    const city = await City.findByIdAndUpdate(
+      id,
+      { name },
+      { new: true }
+    );
+
+    if (!city) return error(res, "City not found");
+
+    return success(res, "City updated", city);
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to update city");
+  }
+};
+
+export const updateCategory = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const name = req.body.name?.trim();
+
+    if (!name) return error(res, "Name required");
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid category id");
+    }
+
+    const exists = await Category.findOne({
+      _id: { $ne: id },
+      name: { $regex: `^${name}$`, $options: "i" }
+    });
+
+    if (exists) return error(res, "Category already exists");
+
+    const category = await Category.findByIdAndUpdate(
+      id,
+      { name },
+      { new: true }
+    );
+
+    if (!category) return error(res, "Category not found");
+
+    return success(res, "Category updated", category);
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to update category");
+  }
+};
+
+export const updateVenue = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { name, cityId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid venue id");
+    }
+
+    const venue: any = await Venue.findById(id);
+    if (!venue) return error(res, "Venue not found");
+
+    if (name) {
+      venue.name = name.trim();
+    }
+
+    if (cityId) {
+      if (!mongoose.Types.ObjectId.isValid(cityId)) {
+        return error(res, "Invalid cityId");
+      }
+
+      const city = await City.findById(cityId);
+      if (!city) return error(res, "City not found");
+
+      venue.cityId = cityId;
+    }
+
+    await venue.save();
+
+    return success(res, "Venue updated", venue);
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to update venue");
+  }
+};
+
 
 
 export const adminEditEvent = async (req: any, res: any) => {

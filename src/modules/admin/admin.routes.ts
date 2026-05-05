@@ -38,5 +38,9 @@ router.patch("/event/:id/trending", controller.updateTrendingScore);
 router.patch("/event/:id", controller.adminEditEvent);
 router.patch("/event/:id/hosts", controller.updateEventHosts);
 
+/* ================= UPDATE ================= */
+router.patch("/city/:id", controller.updateCity);
+router.patch("/category/:id", controller.updateCategory);
+router.patch("/venue/:id", controller.updateVenue);
 
 export default router;
