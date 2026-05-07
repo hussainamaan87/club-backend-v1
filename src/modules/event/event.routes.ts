@@ -6,7 +6,7 @@ import { uploadEvent } from "../../middleware/upload.middleware";
 const router = express.Router();
 
 /* ================= PUBLIC ================= */
-router.get("/", controller.getEvents);
+router.get("/", auth, controller.getEvents);
 
 /* ================= ADMIN ================= */
 router.post("/", auth, allow(["ADMIN"]), controller.createEvent);
