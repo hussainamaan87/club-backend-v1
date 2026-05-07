@@ -8,7 +8,7 @@ import favoriteRoutes from "./modules/favorite/favorite.routes";
 import notificationRoutes from "./modules/notification/notification.routes";
 import devRoutes from "./modules/dev/dev.routes";
 import multer from "multer";
-
+import metaRoutes from "./modules/meta/meta.routes";
 
 const app = express();
 
@@ -33,6 +33,7 @@ app.use("/admin", adminRoutes);
 app.use("/registrations", registrationRoutes);
 app.use("/favorites", favoriteRoutes);
 app.use("/notifications", notificationRoutes);
+app.use("/meta", metaRoutes);
 app.use("/dev", devRoutes);
 
 
