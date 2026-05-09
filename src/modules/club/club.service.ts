@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
-import { error, success } from "../utils/response";
-import Club from "../models/Club";
-import Event from "../models/Event";
+import Club from "../../models/Club";
+import { error, success } from "../../utils/response";
+import Event from "../../models/Event";
+
 
 
 export const getClubs = async (req: any, res: any) => {
