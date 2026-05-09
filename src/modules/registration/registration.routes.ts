@@ -39,15 +39,15 @@ router.post(
   allow(["HOST", "ADMIN"]),
   controller.approveAndCheckin
 );
-router.get(
-  "/preview/:code",
+router.post(
+  "/preview",
   auth,
   allow(["HOST", "ADMIN"]),
   controller.previewQR
 );
 
 router.post(
-  "/checkin/:code",
+  "/checkin",
   auth,
   allow(["HOST", "ADMIN"]),
   controller.checkin

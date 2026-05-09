@@ -21,6 +21,22 @@ const isProfileComplete = (user: any) => {
   );
 };
 
+
+const getProfileProgress = (user: any) => {
+  const fields = [
+    user.name,
+    user.image,
+    user.gender,
+    user.dob,
+    user.bio,
+    user.instagramId,
+    user.email
+  ];
+
+  const completed = fields.filter(Boolean).length;
+
+  return Math.round((completed / fields.length) * 100);
+};
 /* ================= SEND OTP ================= */
 
 export const sendOtp = async (req: any, res: any) => {
@@ -171,7 +187,7 @@ export const getMe = async (req: any, res: any) => {
       instagramId: user.instagramId,
 
       profileCompleted: isProfileComplete(user),
-
+profileProgress: getProfileProgress(user),
       isAdmin: user.roles.includes("ADMIN"),
       isHost: user.roles.includes("HOST")
     });
@@ -240,7 +256,8 @@ export const updateProfile = async (req: any, res: any) => {
     await user.save();
 
     return success(res, "Profile updated", {
-      profileCompleted: isProfileComplete(user)
+      profileCompleted: isProfileComplete(user),
+      profileProgress: getProfileProgress(user)
     });
 
   } catch (err) {

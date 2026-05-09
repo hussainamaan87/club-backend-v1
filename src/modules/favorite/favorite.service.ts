@@ -3,6 +3,23 @@ import Favorite from "../../models/Favorite";
 import Event from "../../models/Event";
 import { success, error } from "../../utils/response";
 
+
+const getEventStatus = (event: any) => {
+  const now = new Date();
+
+  if (new Date(event.endTime) < now) {
+    return "PAST";
+  }
+
+  if (
+    new Date(event.startTime) <= now &&
+    new Date(event.endTime) >= now
+  ) {
+    return "ACTIVE";
+  }
+
+  return "UPCOMING";
+};
 /* ================= TOGGLE ================= */
 
 export const toggleFavorite = async (req: any, res: any) => {
@@ -83,6 +100,7 @@ export const getFavorites = async (req: any, res: any) => {
         return {
           _id: e._id,
           title: e.title,
+          status: getEventStatus(e),
           desc: e.desc,
           startTime: e.startTime,
           endTime: e.endTime,

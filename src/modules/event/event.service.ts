@@ -10,6 +10,27 @@ import cloudinary from "../../utils/cloudinary";
 import Favorite from "../../models/Favorite";
 import { sendNotification } from "../notification/notification.service";
 import { notifyNewEvent } from "../notification/notification.manager";
+import City from "../../models/City";
+import Registration from "../../models/Registration";
+
+
+const getEventStatus = (event: any) => {
+  const now = new Date();
+
+  if (new Date(event.endTime) < now) {
+    return "PAST";
+  }
+
+  if (
+    new Date(event.startTime) <= now &&
+    new Date(event.endTime) >= now
+  ) {
+    return "ACTIVE";
+  }
+
+  return "UPCOMING";
+};
+
 /* ================= GET EVENTS ================= */
 
 export const getEvents = async (req: any, res: any) => {
@@ -75,19 +96,58 @@ export const getEvents = async (req: any, res: any) => {
     // 🔥 FAVORITES LOGIC
     let favSet = new Set<string>();
 
-    if (req.user?.id && events.length > 0) {
-      const favorites = await Favorite.find({
-        userId: req.user.id,
-        eventId: { $in: events.map(e => e._id) }
-      }).lean();
+    // 🔥 REGISTRATION STATUS MAP
+    const registrationMap = new Map<string, string>();
 
-      favSet = new Set(favorites.map(f => f.eventId.toString()));
+    if (req.user?.id && events.length > 0) {
+
+      const [favorites, registrations] = await Promise.all([
+
+        Favorite.find({
+          userId: req.user.id,
+          eventId: { $in: events.map(e => e._id) }
+        }).lean(),
+
+        Registration.find({
+          userId: req.user.id,
+          eventId: { $in: events.map(e => e._id) }
+        })
+          .select("eventId status")
+          .lean()
+      ]);
+
+      favSet = new Set(
+        favorites.map(f => f.eventId.toString())
+      );
+
+      registrations.forEach((r: any) => {
+        registrationMap.set(
+          r.eventId.toString(),
+          r.status
+        );
+      });
     }
 
-    const updatedEvents = events.map(e => ({
-      ...e,
-      isFavorited: favSet.has(e._id.toString())
-    }));
+ const updatedEvents = events.map((e: any) => {
+
+  const booked = e.capacity - e.remaining;
+
+  return {
+    ...e,
+
+    status: getEventStatus(e),
+
+    isFavorited: favSet.has(e._id.toString()),
+
+    registrationStatus:
+      registrationMap.get(e._id.toString()) || null,
+
+    bookedSeats: booked,
+
+    seatsLeftPercent:
+      Math.round((e.remaining / e.capacity) * 100)
+  };
+});
 
     return success(res, "Events fetched", updatedEvents, {
       page,
@@ -178,14 +238,12 @@ export const createEvent = async (req: any, res: any) => {
 
     // 🔥 validate entities
 
-    const [club, category, venue] = await Promise.all([
+    const [club, category, venue, city] = await Promise.all([
 
       Club.findById(clubId),
-
       Category.findById(categoryId),
-
-      Venue.findById(venueId)
-
+      Venue.findById(venueId),
+      City.findById(cityId)
     ]);
 
     if (!club) return error(res, "Invalid club");
@@ -193,6 +251,9 @@ export const createEvent = async (req: any, res: any) => {
     if (!category) return error(res, "Invalid category");
 
     if (!venue) return error(res, "Invalid venue");
+    if (!city) {
+      return error(res, "Invalid city");
+    }
 
     if (venue.cityId.toString() !== cityId.toString()) {
 
@@ -429,7 +490,7 @@ export const getMyEvents = async (req: any, res: any) => {
     const updatedEvents = events.map(e => ({
 
       ...e,
-
+      status: getEventStatus(e),
       isFavorited: favSet.has(e._id.toString())
 
     }));
@@ -471,28 +532,28 @@ export const uploadEventImages = async (req: any, res: any) => {
     }
     const existingImages = event.images?.length || 0;
 
-if (existingImages + files.length > 5) {
-  return error(
-    res,
-    `Maximum 5 images allowed per event`
-  );
-}
+    if (existingImages + files.length > 4) {
+      return error(
+        res,
+        `Maximum 4 images allowed per event`
+      );
+    }
 
     const uploadedImages = files.map((file: any) => ({
-  url: file.path,
+      url: file.path,
 
-  publicId:
-    file.filename || file.public_id,
+      publicId:
+        file.filename || file.public_id,
 
-  originalName: file.originalname,
+      originalName: file.originalname,
 
-  uploadedBy: req.user.id
-}));
+      uploadedBy: req.user.id
+    }));
 
-  event.images = [
-  ...(event.images || []),
-  ...uploadedImages
-];
+    event.images = [
+      ...(event.images || []),
+      ...uploadedImages
+    ];
 
     await event.save();
 
@@ -547,7 +608,7 @@ export const deleteEventImage = async (
     if (image.publicId) {
       await cloudinary.uploader
         .destroy(image.publicId)
-        .catch(() => {});
+        .catch(() => { });
     }
 
     /* ================= REMOVE IMAGE ================= */
@@ -588,7 +649,41 @@ export const getEventById = async (req: any, res: any) => {
       return error(res, "Event not found");
     }
 
-    return success(res, "Event fetched", event);
+    let registrationStatus = null;
+
+if (req.user?.id) {
+
+  const registration: any =
+    await Registration.findOne({
+      userId: req.user.id,
+      eventId: event._id
+    })
+      .select("status")
+      .lean();
+
+  registrationStatus =
+    registration?.status || null;
+}
+const bookedSeats =
+  (event.capacity || 0) -
+  (event.remaining || 0);
+
+return success(res, "Event fetched", {
+  ...event,
+
+  status: getEventStatus(event),
+
+  registrationStatus,
+
+  bookedSeats,
+
+  seatsLeftPercent:
+    event.capacity > 0
+      ? Math.round(
+          (event.remaining / event.capacity) * 100
+        )
+      : 0
+});
 
   } catch (err) {
     console.error(err);

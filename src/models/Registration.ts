@@ -39,7 +39,10 @@ const schema = new mongoose.Schema(
 // 🔥 prevent duplicates
 schema.index({ userId: 1, eventId: 1 }, { unique: true });
 
-// 🔥 host panel queries
+schema.index({
+  userId: 1,
+  status: 1
+});
 schema.index({ eventId: 1, status: 1 });
 
 export default mongoose.model("Registration", schema);

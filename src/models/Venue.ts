@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const schema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-
+    googleMapsUrl: String,
     cityId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "City",

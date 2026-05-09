@@ -14,19 +14,71 @@ import { notifyEventUpdateToAll } from "../notification/notification.manager";
 
 export const createCity = async (req: any, res: any) => {
   try {
-    const name = req.body.name?.trim().toLowerCase();
-    if (!name) return error(res, "Name required");
+    const {
+      name,
+      state,
+      pinCode
+    } = req.body;
 
-    const city = await City.create({ name });
+    /* ================= VALIDATION ================= */
 
-    return success(res, "City created", city);
+    if (!name || !state) {
+      return error(
+        res,
+        "Name and state required"
+      );
+    }
+
+    const trimmedName = name
+      .trim()
+      .toLowerCase();
+
+    const trimmedState = state
+      .trim()
+      .toUpperCase();
+
+    /* ================= DUPLICATE CHECK ================= */
+
+    const existing = await City.findOne({
+      name: {
+        $regex: `^${trimmedName}$`,
+        $options: "i"
+      },
+      state: {
+        $regex: `^${trimmedState}$`,
+        $options: "i"
+      }
+    });
+
+    if (existing) {
+      return error(
+        res,
+        "City already exists"
+      );
+    }
+
+    /* ================= CREATE ================= */
+
+    const city = await City.create({
+      name: trimmedName,
+      state: trimmedState,
+      pinCode: pinCode?.trim()
+    });
+
+    return success(
+      res,
+      "City created",
+      city
+    );
 
   } catch (err: any) {
-    if (err.code === 11000) {
-      return error(res, "City already exists");
-    }
+
     console.error(err);
-    return error(res, "City creation failed");
+
+    return error(
+      res,
+      "City creation failed"
+    );
   }
 };
 

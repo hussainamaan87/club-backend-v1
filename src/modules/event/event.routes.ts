@@ -5,14 +5,42 @@ import { uploadEvent } from "../../middleware/upload.middleware";
 
 const router = express.Router();
 
-/* ================= PUBLIC ================= */
-router.get("/", auth, controller.getEvents);
+/* ================= EVENTS ================= */
 
-/* ================= ADMIN ================= */
-router.post("/", auth, allow(["ADMIN"]), controller.createEvent);
+router.get(
+  "/",
+  auth,
+  controller.getEvents
+);
 
-router.get("/:id", auth, controller.getEventById);
-/* ================= HOST ================= */
+/* ================= MY EVENTS ================= */
+
+router.get(
+  "/my",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.getMyEvents
+);
+
+/* ================= CREATE EVENT ================= */
+
+router.post(
+  "/",
+  auth,
+  allow(["ADMIN"]),
+  controller.createEvent
+);
+
+/* ================= EVENT DETAILS ================= */
+
+router.get(
+  "/:id",
+  auth,
+  controller.getEventById
+);
+
+/* ================= HOST EDIT ================= */
+
 router.patch(
   "/:id/host-edit",
   auth,
@@ -21,6 +49,7 @@ router.patch(
 );
 
 /* ================= EVENT BANNER ================= */
+
 router.patch(
   "/:id/banner",
   auth,
@@ -28,26 +57,24 @@ router.patch(
   uploadEvent.single("banner"),
   controller.updateEventBanner
 );
+
+/* ================= EVENT IMAGES ================= */
+
 router.patch(
   "/:id/images",
   auth,
   allow(["HOST", "ADMIN"]),
-  uploadEvent.array("images", 5),
+  uploadEvent.array("images", 4),
   controller.uploadEventImages
 );
+
+/* ================= DELETE EVENT IMAGE ================= */
 
 router.delete(
   "/:id/images/:imageId",
   auth,
   allow(["HOST", "ADMIN"]),
   controller.deleteEventImage
-);
-
-router.get(
-  "/my",
-  auth,
-  allow(["HOST", "ADMIN"]),
-  controller.getMyEvents
 );
 
 export default router;

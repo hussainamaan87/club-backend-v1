@@ -5,12 +5,38 @@ const schema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
-      lowercase: true,
+      trim: true,
+      lowercase: true
+    },
+
+    state: {
+      type: String,
+      required: true,
+      uppercase: true,
+      trim: true
+    },
+
+    pinCode: {
+      type: String,
       trim: true
     }
   },
   { timestamps: true }
 );
 
-export default mongoose.model("City", schema);
+/* ================= UNIQUE ================= */
+
+schema.index(
+  {
+    name: 1,
+    state: 1
+  },
+  {
+    unique: true
+  }
+);
+
+export default mongoose.model(
+  "City",
+  schema
+);
