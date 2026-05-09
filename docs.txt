@@ -1,0 +1,815 @@
+========================================
+CLUB APP BACKEND API DOCUMENTATION
+========================================
+
+BASE URL
+--------
+http://localhost:3000
+
+AUTH
+----
+Most protected routes require:
+
+Authorization: Bearer <JWT_TOKEN>
+
+Common Response Format
+----------------------
+SUCCESS:
+{
+  success: true,
+  message: "...",
+  data: ...
+}
+
+ERROR:
+{
+  success: false,
+  message: "..."
+}
+
+====================================================
+AUTH MODULE
+====================================================
+
+POST /auth/send-otp
+-------------------
+Purpose:
+Send OTP to phone number.
+
+Body:
+{
+  "phone": "9876543210"
+}
+
+Returns:
+- OTP sent
+- Rate limit error
+- Invalid phone
+
+Response:
+{
+  success: true,
+  message: "OTP sent"
+}
+
+
+POST /auth/verify-otp
+---------------------
+Purpose:
+Verify OTP and login/signup user.
+
+Body:
+{
+  "phone": "9876543210",
+  "otp": "123456"
+}
+
+Returns:
+{
+  success: true,
+  message: "Login success",
+  data: {
+    token: "JWT_TOKEN"
+  }
+}
+
+
+GET /auth/me
+------------
+Auth Required: YES
+
+Purpose:
+Get current logged-in user.
+
+Returns:
+{
+  id,
+  name,
+  phone,
+  email,
+  roles,
+  dob,
+  gender,
+  bio,
+  image,
+  instagramId,
+  profileCompleted,
+  profileProgress,
+  isAdmin,
+  isHost
+}
+
+
+PATCH /auth/profile
+-------------------
+Auth Required: YES
+
+Purpose:
+Update profile details.
+
+Body:
+{
+  "name": "Amaan",
+  "bio": "hello",
+  "gender": "MALE",
+  "dob": "2000-01-01",
+  "email": "a@test.com",
+  "instagramId": "amaan"
+}
+
+Returns:
+Updated profile progress info.
+
+
+PATCH /auth/profile/image
+-------------------------
+Auth Required: YES
+FormData:
+image -> file
+
+Purpose:
+Upload/update user profile image.
+
+Returns:
+{
+  image: "cloudinary_url"
+}
+
+
+POST /auth/fcm-token
+--------------------
+Auth Required: YES
+
+Purpose:
+Save FCM token for push notifications.
+
+Body:
+{
+  "token": "FCM_TOKEN"
+}
+
+====================================================
+EVENT MODULE
+====================================================
+
+GET /events
+-----------
+Auth Required: YES
+
+Purpose:
+Get all events.
+
+Query Params:
+?page=1
+?limit=10
+?cityId=
+?categoryId=
+?today=true
+?upcoming=true
+?featured=true
+?sort=latest|trending|featured
+
+Returns:
+[
+  {
+    _id,
+    title,
+    desc,
+    startTime,
+    endTime,
+    banner,
+    status,
+    isFavorited,
+    registrationStatus,
+    bookedSeats,
+    seatsLeftPercent,
+    clubId,
+    cityId,
+    venueId,
+    categoryId
+  }
+]
+
+
+GET /events/:id
+---------------
+Auth Required: YES
+
+Purpose:
+Get single event details.
+
+Returns:
+{
+  _id,
+  title,
+  desc,
+  banner,
+  images,
+  hosts,
+  registrationStatus,
+  bookedSeats,
+  seatsLeftPercent,
+  status
+}
+
+
+GET /events/my
+--------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Get events assigned to host.
+
+Returns:
+List of host events.
+
+
+POST /events
+-------------
+Auth Required: YES
+Roles: ADMIN
+
+Purpose:
+Create new event.
+
+Body:
+{
+  "title": "",
+  "desc": "",
+  "clubId": "",
+  "categoryId": "",
+  "cityId": "",
+  "venueId": "",
+  "capacity": 100,
+  "startTime": "",
+  "endTime": "",
+  "hosts": ["HOST_USER_ID"]
+}
+
+Returns:
+Created event.
+
+
+PATCH /events/:id/host-edit
+---------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Host edits event.
+
+Allowed fields:
+{
+  "desc": "",
+  "startTime": "",
+  "endTime": "",
+  "capacity": 100
+}
+
+
+PATCH /events/:id/banner
+------------------------
+Auth Required: YES
+Roles: ADMIN
+
+FormData:
+banner -> image
+
+Purpose:
+Upload event banner.
+
+
+PATCH /events/:id/images
+------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+FormData:
+images -> multiple images
+
+Limit:
+Maximum 4 images total.
+
+Purpose:
+Upload gallery images.
+
+
+DELETE /events/:id/images/:imageId
+----------------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Delete event image.
+
+
+====================================================
+REGISTRATION MODULE
+====================================================
+
+POST /registrations
+-------------------
+Auth Required: YES
+
+Purpose:
+Register for event.
+
+Body:
+{
+  "eventId": ""
+}
+
+Returns:
+Registration success.
+
+
+GET /registrations/my
+---------------------
+Auth Required: YES
+
+Purpose:
+Get current user's registrations.
+
+Returns:
+[
+  {
+    registrationId,
+    status,
+    used,
+    qrAvailable,
+    passCode,
+    event
+  }
+]
+
+
+GET /registrations/:id/qr
+-------------------------
+Auth Required: YES
+
+Purpose:
+Generate QR for approved registration.
+
+Returns:
+{
+  qr: "base64_qr"
+}
+
+
+GET /registrations/event/:eventId
+---------------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Get all registrations for event.
+
+
+POST /registrations/:id/approve
+-------------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Approve registration.
+
+Returns:
+Pass generated automatically.
+
+
+POST /registrations/:id/reject
+------------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Reject registration.
+
+
+POST /registrations/:id/approve-and-checkin
+-------------------------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Approve pending registration and check-in immediately.
+
+
+POST /registrations/preview
+---------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Preview scanned QR.
+
+Body:
+{
+  "qr": "QR_DATA"
+}
+
+Returns:
+{
+  registrationId,
+  status,
+  used,
+  canApprove,
+  canCheckin,
+  user,
+  event
+}
+
+
+POST /registrations/checkin
+---------------------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Check-in attendee using QR.
+
+Body:
+{
+  "qr": "QR_DATA"
+}
+
+====================================================
+FAVORITES MODULE
+====================================================
+
+POST /favorites/:eventId
+------------------------
+Auth Required: YES
+
+Purpose:
+Toggle favorite event.
+
+Returns:
+- Added to favorites
+- Removed from favorites
+
+
+GET /favorites
+--------------
+Auth Required: YES
+
+Purpose:
+Get favorite events.
+
+
+====================================================
+CLUB MODULE
+====================================================
+
+GET /clubs
+----------
+Purpose:
+Get all clubs.
+
+Query Params:
+?search=
+?categoryId=
+
+Returns:
+Club list.
+
+
+GET /clubs/:id
+--------------
+Purpose:
+Get single club details.
+
+
+GET /clubs/:id/events
+---------------------
+Purpose:
+Get upcoming events of club.
+
+Returns:
+Events with:
+- status
+- favorite info
+- registration status
+- seats info
+
+
+====================================================
+NOTIFICATION MODULE
+====================================================
+
+GET /notifications
+------------------
+Auth Required: YES
+
+Purpose:
+Get user notifications.
+
+
+PATCH /notifications/read
+-------------------------
+Auth Required: YES
+
+Purpose:
+Mark all notifications as read.
+
+
+====================================================
+HOST MODULE
+====================================================
+
+GET /host/users
+---------------
+Auth Required: YES
+Roles: HOST or ADMIN
+
+Purpose:
+Search users.
+
+Query:
+?search=
+
+Searches:
+- name
+- instagramId
+
+
+====================================================
+ADMIN MODULE
+====================================================
+
+ALL ROUTES REQUIRE:
+Auth + ADMIN role
+
+--------------------------------
+CITY
+--------------------------------
+
+POST /admin/city
+
+Body:
+{
+  "name": "Pune",
+  "state": "MH",
+  "pinCode": "411001"
+}
+
+GET /admin/city
+PATCH /admin/city/:id
+
+
+--------------------------------
+VENUE
+--------------------------------
+
+POST /admin/venue
+
+Body:
+{
+  "name": "Phoenix Mall",
+  "cityId": ""
+}
+
+GET /admin/venue
+PATCH /admin/venue/:id
+
+
+--------------------------------
+CATEGORY
+--------------------------------
+
+POST /admin/category
+
+Body:
+{
+  "name": "music"
+}
+
+GET /admin/category
+PATCH /admin/category/:id
+
+
+--------------------------------
+CLUB
+--------------------------------
+
+POST /admin/club
+FormData:
+image -> file
+
+Body:
+{
+  "name": "",
+  "description": "",
+  "categoryId": ""
+}
+
+GET /admin/club
+
+PATCH /admin/club/:id
+
+PATCH /admin/club/:id/image
+FormData:
+image -> file
+
+PATCH /admin/club/:id/banner
+FormData:
+banner -> file
+
+
+--------------------------------
+USERS
+--------------------------------
+
+POST /admin/user/host
+
+Body:
+{
+  "phone": "",
+  "name": ""
+}
+
+Purpose:
+Create host user.
+
+PATCH /admin/user/:id/role
+
+Body:
+{
+  "roles": ["ADMIN","HOST"]
+}
+
+GET /admin/user/search
+Query:
+?phone=
+?name=
+
+
+--------------------------------
+EVENT ADMIN
+--------------------------------
+
+GET /admin/event
+Query:
+?search=
+?cityId=
+?categoryId=
+?featured=true
+?status=upcoming|active|past
+?page=
+?limit=
+
+GET /admin/event/:id
+
+PATCH /admin/event/:id
+
+Purpose:
+Full admin event edit.
+
+Editable:
+- title
+- desc
+- timing
+- category
+- venue
+- city
+- hosts
+- featured
+- trending
+- capacity
+
+PATCH /admin/event/:id/feature
+
+Body:
+{
+  "isFeatured": true
+}
+
+PATCH /admin/event/:id/trending
+
+Body:
+{
+  "score": 100
+}
+
+PATCH /admin/event/:id/hosts
+
+Body:
+{
+  "hosts": ["HOST_ID"]
+}
+
+
+--------------------------------
+DASHBOARD
+--------------------------------
+
+GET /admin/dashboard
+
+Returns:
+{
+  totalUsers,
+  totalHosts,
+  totalEvents,
+  activeEvents,
+  upcomingEvents,
+  pastEvents
+}
+
+====================================================
+META MODULE
+====================================================
+
+GET /meta/cities
+GET /meta/categories
+GET /meta/venues
+
+Purpose:
+Public lightweight metadata APIs.
+
+====================================================
+DEV MODULE
+====================================================
+
+POST /dev/test
+--------------
+Auth Required: YES
+
+Purpose:
+Send test notification to self.
+
+
+POST /dev/test/:userId
+----------------------
+Purpose:
+Send test notification to any user.
+
+
+====================================================
+ROLES
+====================================================
+
+USER
+- register events
+- favorites
+- notifications
+
+HOST
+- manage registrations
+- check-in
+- upload event images
+- edit assigned events
+
+ADMIN
+- full control
+- create events
+- manage cities/venues/categories/clubs/users
+
+====================================================
+UPLOAD LIMITS
+====================================================
+
+Allowed:
+jpg
+jpeg
+png
+webp
+
+Max Size:
+2 MB
+
+====================================================
+EVENT STATUS LOGIC
+====================================================
+
+UPCOMING
+= event not started
+
+ACTIVE
+= currently ongoing
+
+PAST
+= already ended
+
+====================================================
+REGISTRATION STATUS
+====================================================
+
+PENDING
+APPROVED
+REJECTED
+CHECKED_IN
+
+====================================================
+NOTIFICATION TYPES
+====================================================
+
+REGISTRATION_APPROVED
+REGISTRATION_REJECTED
+CHECKIN_SUCCESS
+HOST_ASSIGNED
+EVENT_UPDATED
+EVENT_REMINDER
+NEW_EVENT
+FAVORITE_REMINDER
+SYSTEM
