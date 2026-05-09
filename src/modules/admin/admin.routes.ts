@@ -9,8 +9,8 @@ const router = express.Router();
 router.use(auth, allow(["ADMIN"]));
 
 /* ================= CITY ================= */
-router.post("/city", controller.createCity);
-router.get("/city", controller.getCities);
+router.post("/cities", controller.createCity);
+router.get("/cities", controller.getCities);
 
 /* ================= VENUE ================= */
 router.post("/venue", controller.createVenue);
@@ -42,7 +42,7 @@ router.patch("/event/:id/hosts", controller.updateEventHosts);
 
 
 /* ================= UPDATE ================= */
-router.patch("/city/:id", controller.updateCity);
+router.patch("/cities/:id", controller.updateCity);
 router.patch("/category/:id", controller.updateCategory);
 router.patch("/venue/:id", controller.updateVenue);
 router.get("/dashboard", controller.getDashboardStats);
