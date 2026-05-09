@@ -8,7 +8,6 @@ import Event from "../../models/Event";
 import cloudinary from "../../utils/cloudinary";
 import { success, error } from "../../utils/response";
 import { sendNotification } from "../notification/notification.service";
-import Favorite from "../../models/Favorite";
 import { notifyEventUpdateToAll } from "../notification/notification.manager";
 
 /* ================= CITY ================= */
@@ -42,19 +41,41 @@ export const getCities = async (req: any, res: any) => {
 };
 
 /* ================= VENUE ================= */
-
 export const createVenue = async (req: any, res: any) => {
   try {
     const { name, cityId } = req.body;
 
-    if (!name || !cityId) return error(res, "Missing fields");
+    /* ================= VALIDATION ================= */
+
+    if (!name || !cityId) {
+      return error(res, "Missing fields");
+    }
 
     if (!mongoose.Types.ObjectId.isValid(cityId)) {
       return error(res, "Invalid cityId");
     }
 
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      return error(res, "Venue name required");
+    }
+
+    /* ================= CHECK CITY ================= */
+
+    const city = await City.findById(cityId);
+
+    if (!city) {
+      return error(res, "City not found");
+    }
+
+    /* ================= DUPLICATE CHECK ================= */
+
     const exists = await Venue.findOne({
-      name: { $regex: `^${name.trim()}$`, $options: "i" },
+      name: {
+        $regex: `^${trimmedName}$`,
+        $options: "i"
+      },
       cityId
     });
 
@@ -62,8 +83,10 @@ export const createVenue = async (req: any, res: any) => {
       return error(res, "Venue already exists in this city");
     }
 
+    /* ================= CREATE ================= */
+
     const venue = await Venue.create({
-      name: name.trim(),
+      name: trimmedName,
       cityId
     });
 
@@ -74,6 +97,7 @@ export const createVenue = async (req: any, res: any) => {
     return error(res, "Venue creation failed");
   }
 };
+
 export const getVenues = async (req: any, res: any) => {
   try {
     const venues = await Venue.find().populate("cityId").lean();
@@ -93,7 +117,7 @@ export const createClub = async (req: any, res: any) => {
 
     if (!name) return error(res, "Name required");
 
-        if (file && !file.mimetype.startsWith("image/")) {
+    if (file && !file.mimetype.startsWith("image/")) {
 
       return error(res, "Only image files allowed");
 
@@ -146,7 +170,7 @@ export const createHost = async (req: any, res: any) => {
       user = await User.create({
         phone,
         name,
-        roles: ["HOST"]
+        roles: ["USER", "HOST"]
       });
     } else {
       if (!user.roles.includes("HOST")) {
@@ -212,14 +236,14 @@ export const updateClubImage = async (req: any, res: any) => {
     if (!club) return error(res, "Club not found");
     if (!req.file) return error(res, "Image required");
 
-        if (!req.file.mimetype.startsWith("image/")) {
+    if (!req.file.mimetype.startsWith("image/")) {
 
       return error(res, "Only image files allowed");
 
     }
 
     if (club.imagePublicId) {
-      await cloudinary.uploader.destroy(club.imagePublicId).catch(() => {});
+      await cloudinary.uploader.destroy(club.imagePublicId).catch(() => { });
     }
 
     club.image = req.file.path;
@@ -245,10 +269,10 @@ export const updateClubBanner = async (req: any, res: any) => {
 
     if (!req.file.mimetype.startsWith("image/")) {
       return error(res, "Only image files allowed");
-    }    
+    }
 
     if (club.bannerPublicId) {
-      await cloudinary.uploader.destroy(club.bannerPublicId).catch(() => {});
+      await cloudinary.uploader.destroy(club.bannerPublicId).catch(() => { });
     }
 
     club.banner = req.file.path;
@@ -312,7 +336,7 @@ export const toggleFeatureEvent = async (req: any, res: any) => {
           body: `"${event.title}" is now featured`,
           type: "EVENT_UPDATED",
           data: { eventId: event._id }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
 
@@ -465,26 +489,210 @@ export const updateVenue = async (req: any, res: any) => {
 
 export const adminEditEvent = async (req: any, res: any) => {
   try {
-    const event: any = await Event.findById(req.params.id);
-    if (!event) return error(res, "Event not found");
+    const { id } = req.params;
 
-    const allowedFields = [
-      "title",
-      "desc",
-      "startTime",
-      "endTime",
-      "capacity"
-    ];
-
-    for (const key of allowedFields) {
-      if (req.body[key] !== undefined) {
-        event[key] = req.body[key];
-      }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid event id");
     }
+
+    const event: any = await Event.findById(id);
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    const {
+      title,
+      desc,
+      startTime,
+      endTime,
+      capacity,
+      cityId,
+      venueId,
+      categoryId,
+      clubId,
+      hosts,
+      isFeatured,
+      trendingScore
+    } = req.body;
+
+    /* ================= TITLE ================= */
+
+    if (title !== undefined) {
+      if (!title.trim()) {
+        return error(res, "Title required");
+      }
+
+      event.title = title.trim();
+    }
+
+    /* ================= DESCRIPTION ================= */
+
+    if (desc !== undefined) {
+      if (!desc.trim()) {
+        return error(res, "Description required");
+      }
+
+      event.desc = desc.trim();
+    }
+
+    /* ================= TIME VALIDATION ================= */
+
+    const finalStartTime = startTime
+      ? new Date(startTime)
+      : new Date(event.startTime);
+
+    const finalEndTime = endTime
+      ? new Date(endTime)
+      : new Date(event.endTime);
+
+    if (finalStartTime >= finalEndTime) {
+      return error(res, "Invalid event timing");
+    }
+
+    if (startTime !== undefined) {
+      event.startTime = finalStartTime;
+    }
+
+    if (endTime !== undefined) {
+      event.endTime = finalEndTime;
+    }
+
+    /* ================= CAPACITY ================= */
+
+    if (capacity !== undefined) {
+      const parsedCapacity = Number(capacity);
+
+      if (isNaN(parsedCapacity) || parsedCapacity <= 0) {
+        return error(res, "Invalid capacity");
+      }
+
+      const bookedSeats = event.capacity - event.remaining;
+
+      if (parsedCapacity < bookedSeats) {
+        return error(
+          res,
+          `Cannot reduce capacity below booked seats (${bookedSeats})`
+        );
+      }
+
+      const diff = parsedCapacity - event.capacity;
+
+      event.capacity = parsedCapacity;
+      event.remaining += diff;
+    }
+
+    /* ================= CITY ================= */
+
+    if (cityId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(cityId)) {
+        return error(res, "Invalid cityId");
+      }
+
+      event.cityId = cityId;
+    }
+
+    /* ================= CATEGORY ================= */
+
+    if (categoryId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        return error(res, "Invalid categoryId");
+      }
+
+      const category = await Category.findById(categoryId);
+
+      if (!category) {
+        return error(res, "Category not found");
+      }
+
+      event.categoryId = categoryId;
+    }
+
+    /* ================= CLUB ================= */
+
+    if (clubId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(clubId)) {
+        return error(res, "Invalid clubId");
+      }
+
+      const club = await Club.findById(clubId);
+
+      if (!club) {
+        return error(res, "Club not found");
+      }
+
+      event.clubId = clubId;
+    }
+
+    /* ================= VENUE ================= */
+
+    if (venueId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(venueId)) {
+        return error(res, "Invalid venueId");
+      }
+
+      const venue: any = await Venue.findById(venueId);
+
+      if (!venue) {
+        return error(res, "Venue not found");
+      }
+
+      const finalCityId = cityId || event.cityId.toString();
+
+      if (venue.cityId.toString() !== finalCityId.toString()) {
+        return error(res, "Venue does not belong to city");
+      }
+
+      event.venueId = venueId;
+    }
+
+    /* ================= HOSTS ================= */
+
+    if (hosts !== undefined) {
+      if (!Array.isArray(hosts) || hosts.length === 0) {
+        return error(res, "Hosts must be non-empty array");
+      }
+
+      const uniqueHosts = [...new Set(hosts)];
+
+      const users = await User.find({
+        _id: { $in: uniqueHosts }
+      });
+
+      if (users.length !== uniqueHosts.length) {
+        return error(res, "Some hosts not found");
+      }
+
+      const invalidHost = users.find(
+        (u: any) => !u.roles.includes("HOST")
+      );
+
+      if (invalidHost) {
+        return error(res, "Only HOST users allowed");
+      }
+
+      event.hosts = uniqueHosts;
+    }
+
+    /* ================= FEATURED ================= */
+
+    if (isFeatured !== undefined) {
+      event.isFeatured = !!isFeatured;
+    }
+
+    /* ================= TRENDING ================= */
+
+    if (trendingScore !== undefined) {
+      event.trendingScore = Number(trendingScore) || 0;
+    }
+
+    /* ================= SAVE ================= */
 
     await event.save();
 
-    notifyEventUpdateToAll(event).catch(() => {});
+    /* ================= NOTIFY ================= */
+
+    notifyEventUpdateToAll(event).catch(() => { });
 
     return success(res, "Event updated", event);
 
@@ -503,11 +711,11 @@ export const searchUsers = async (req: any, res: any) => {
 
     const filter = search
       ? {
-          $or: [
-            { phone: { $regex: search, $options: "i" } },
-            { name: { $regex: search, $options: "i" } }
-          ]
-        }
+        $or: [
+          { phone: { $regex: search, $options: "i" } },
+          { name: { $regex: search, $options: "i" } }
+        ]
+      }
       : {};
 
     const users = await User.find(filter)
@@ -597,7 +805,7 @@ export const updateEventHosts = async (req: any, res: any) => {
         body: `You are now a host for "${event.title}"`,
         type: "HOST_ASSIGNED",
         data: { eventId: event._id }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     return success(res, "Hosts updated", event);
@@ -605,5 +813,224 @@ export const updateEventHosts = async (req: any, res: any) => {
   } catch (err) {
     console.error(err);
     return error(res, "Failed to update hosts");
+  }
+};
+
+export const getAllEvents = async (req: any, res: any) => {
+  try {
+    const {
+      search,
+      cityId,
+      categoryId,
+      featured,
+      status,
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    const filter: any = {};
+
+    /* ================= SEARCH ================= */
+
+    if (search) {
+      filter.title = {
+        $regex: search,
+        $options: "i"
+      };
+    }
+
+    /* ================= CITY ================= */
+
+    if (cityId) {
+      if (!mongoose.Types.ObjectId.isValid(cityId)) {
+        return error(res, "Invalid cityId");
+      }
+
+      filter.cityId = cityId;
+    }
+
+    /* ================= CATEGORY ================= */
+
+    if (categoryId) {
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        return error(res, "Invalid categoryId");
+      }
+
+      filter.categoryId = categoryId;
+    }
+
+    /* ================= FEATURED ================= */
+
+    if (featured === "true") {
+      filter.isFeatured = true;
+    }
+
+    if (featured === "false") {
+      filter.isFeatured = false;
+    }
+
+    /* ================= STATUS ================= */
+
+    const now = new Date();
+
+    if (status === "upcoming") {
+      filter.startTime = { $gt: now };
+    }
+
+    if (status === "past") {
+      filter.endTime = { $lt: now };
+    }
+
+    if (status === "active") {
+      filter.startTime = { $lte: now };
+      filter.endTime = { $gte: now };
+    }
+
+    /* ================= PAGINATION ================= */
+
+    const pageNum = Math.max(Number(page), 1);
+    const limitNum = Math.min(Number(limit), 50);
+
+    const skip = (pageNum - 1) * limitNum;
+
+    /* ================= QUERY ================= */
+
+    const [events, total] = await Promise.all([
+      Event.find(filter)
+        .populate("clubId", "name image")
+        .populate("cityId", "name")
+        .populate("venueId", "name")
+        .populate("categoryId", "name")
+        .populate("hosts", "name phone")
+        .sort({ startTime: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+
+      Event.countDocuments(filter)
+    ]);
+
+
+    const updatedEvents = events.map((e: any) => {
+      let status = "UPCOMING";
+
+      if (new Date(e.endTime) < now) {
+        status = "PAST";
+      } else if (
+        new Date(e.startTime) <= now &&
+        new Date(e.endTime) >= now
+      ) {
+        status = "ACTIVE";
+      }
+
+      return {
+        ...e,
+        status
+      };
+    });
+
+    return success(res, "Events fetched", updatedEvents, {
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum)
+    });
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to fetch events");
+  }
+};
+
+export const getEventById = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid event id");
+    }
+
+    const event = await Event.findById(id)
+      .populate("clubId")
+      .populate("cityId")
+      .populate("venueId")
+      .populate("categoryId")
+      .populate("hosts", "name phone roles")
+      .populate("createdBy", "name phone")
+      .lean();
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    const now = new Date();
+    let status = "UPCOMING";
+    if (new Date(event.endTime) < now) {
+      status = "PAST";
+    } else if (
+      new Date(event.startTime) <= now &&
+      new Date(event.endTime) >= now
+    ) {
+      status = "ACTIVE";
+    }
+    const updatedEvent = {
+      ...event,
+      status
+    };
+
+    return success(res, "Event fetched", updatedEvent);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to fetch event");
+  }
+};
+
+export const getDashboardStats = async (req: any, res: any) => {
+  try {
+    const now = new Date();
+
+    const [
+      totalUsers,
+      totalHosts,
+      totalEvents,
+      activeEvents,
+      upcomingEvents,
+      pastEvents
+    ] = await Promise.all([
+      User.countDocuments(),
+
+      User.countDocuments({
+        roles: "HOST"
+      }),
+
+      Event.countDocuments(),
+
+      Event.countDocuments({
+        startTime: { $lte: now },
+        endTime: { $gte: now }
+      }),
+
+      Event.countDocuments({
+        startTime: { $gt: now }
+      }),
+
+      Event.countDocuments({
+        endTime: { $lt: now }
+      })
+    ]);
+
+    return success(res, "Dashboard stats fetched", {
+      totalUsers,
+      totalHosts,
+      totalEvents,
+      activeEvents,
+      upcomingEvents,
+      pastEvents
+    });
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed to fetch dashboard stats");
   }
 };

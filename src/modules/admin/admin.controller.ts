@@ -28,10 +28,13 @@ export const getCategories = service.getCategories;
 export const toggleFeatureEvent = service.toggleFeatureEvent;
 export const updateTrendingScore = service.updateTrendingScore;
 export const adminEditEvent = service.adminEditEvent;
-
+export const getAllEvents = service.getAllEvents;
+export const getEventById = service.getEventById;
 export const updateEventHosts = service.updateEventHosts;
 
 /* ================= UPDATE ================= */
 export const updateCity = service.updateCity;
 export const updateCategory = service.updateCategory;
 export const updateVenue = service.updateVenue;
+
+export const getDashboardStats = service.getDashboardStats;

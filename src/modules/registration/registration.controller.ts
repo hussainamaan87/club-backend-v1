@@ -9,3 +9,5 @@ export const reject = service.reject;
 
 export const checkin = service.checkin;
 export const getQR = service.getQR;
+export const previewQR = service.previewQR;
+export const approveAndCheckin = service.approveAndCheckin;

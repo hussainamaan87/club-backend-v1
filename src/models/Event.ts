@@ -53,7 +53,35 @@ const schema = new mongoose.Schema(
     ],
 
     banner: String,
+
     bannerPublicId: String,
+
+  images: [
+  {
+    url: {
+      type: String,
+      required: true
+    },
+
+    publicId: {
+      type: String,
+      required: true,
+      index: true
+    },
+
+    originalName: String,
+
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
+    },
+
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }
+],
 
     isFeatured: {
       type: Boolean,
@@ -62,10 +90,10 @@ const schema = new mongoose.Schema(
     },
 
     favoriteCount: {
-  type: Number,
-  default: 0,
-  index: true
-},
+      type: Number,
+      default: 0,
+      index: true
+    },
     trendingScore: {
       type: Number,
       default: 0,
@@ -81,5 +109,9 @@ schema.index({ categoryId: 1, startTime: 1 });
 schema.index({ isFeatured: 1, startTime: 1 });
 schema.index({ trendingScore: -1 });
 schema.index({ hosts: 1 });
+schema.index({
+  title: "text",
+  desc: "text"
+});
 
 export default mongoose.model("Event", schema);

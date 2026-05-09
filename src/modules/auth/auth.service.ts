@@ -12,6 +12,15 @@ import cloudinary from "../../utils/cloudinary";
 const hashOtp = (otp: string) =>
   crypto.createHash("sha256").update(otp).digest("hex");
 
+const isProfileComplete = (user: any) => {
+  return !!(
+    user.name &&
+    user.image &&
+    user.gender &&
+    user.dob
+  );
+};
+
 /* ================= SEND OTP ================= */
 
 export const sendOtp = async (req: any, res: any) => {
@@ -145,9 +154,7 @@ export const verifyOtp = async (req: any, res: any) => {
 
 export const getMe = async (req: any, res: any) => {
   try {
-    const user = await User.findById(req.user.id).select(
-      "name phone roles dob gender bio image"
-    );
+    const user: any = await User.findById(req.user.id);
 
     if (!user) return error(res, "User not found", 404);
 
@@ -155,11 +162,16 @@ export const getMe = async (req: any, res: any) => {
       id: user._id,
       name: user.name,
       phone: user.phone,
+      email: user.email,
       roles: user.roles,
       dob: user.dob,
       gender: user.gender,
       bio: user.bio,
       image: user.image,
+      instagramId: user.instagramId,
+
+      profileCompleted: isProfileComplete(user),
+
       isAdmin: user.roles.includes("ADMIN"),
       isHost: user.roles.includes("HOST")
     });
@@ -174,50 +186,68 @@ export const getMe = async (req: any, res: any) => {
 
 export const updateProfile = async (req: any, res: any) => {
   try {
-    const { name, dob, gender, bio } = req.body;
+    const {
+      name,
+      dob,
+      gender,
+      bio,
+      email,
+      instagramId
+    } = req.body;
 
     const user: any = await User.findById(req.user.id);
-    if (!user) return error(res, "User not found");
 
-    if (name) user.name = name.trim();
+    if (!user) {
+      return error(res, "User not found");
+    }
+
+    if (name !== undefined) {
+      user.name = name.trim();
+    }
+
+    if (bio !== undefined) {
+      user.bio = bio.trim();
+    }
+
+    if (instagramId !== undefined) {
+      user.instagramId = instagramId.trim();
+    }
+
+    if (email !== undefined) {
+      user.email = email.trim().toLowerCase();
+    }
 
     if (dob) {
       const parsed = new Date(dob);
+
       if (isNaN(parsed.getTime())) {
-        return error(res, "Invalid date of birth");
+        return error(res, "Invalid DOB");
       }
+
       user.dob = parsed;
     }
 
-    const allowed = ["MALE", "FEMALE", "OTHER"];
-
     if (gender) {
+      const allowed = ["MALE", "FEMALE", "OTHER"];
+
       if (!allowed.includes(gender)) {
         return error(res, "Invalid gender");
       }
+
       user.gender = gender;
     }
-
-    if (bio) user.bio = bio;
 
     await user.save();
 
     return success(res, "Profile updated", {
-      id: user._id,
-      name: user.name,
-      phone: user.phone,
-      roles: user.roles,
-      dob: user.dob,
-      gender: user.gender,
-      bio: user.bio
+      profileCompleted: isProfileComplete(user)
     });
 
   } catch (err) {
     console.error(err);
-    return error(res, "Failed to update profile");
+    return error(res, "Failed");
   }
 };
-
 /* ================= UPDATE PROFILE IMAGE ================= */
 
 export const updateProfileImage = async (req: any, res: any) => {

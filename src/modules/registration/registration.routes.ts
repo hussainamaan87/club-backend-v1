@@ -34,6 +34,19 @@ router.post(
 );
 
 router.post(
+  "/:id/approve-and-checkin",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.approveAndCheckin
+);
+router.get(
+  "/preview/:code",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.previewQR
+);
+
+router.post(
   "/checkin/:code",
   auth,
   allow(["HOST", "ADMIN"]),

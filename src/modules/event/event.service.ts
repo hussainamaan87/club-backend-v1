@@ -445,3 +445,153 @@ export const getMyEvents = async (req: any, res: any) => {
   }
 
 };
+
+/* ================= EVENT IMAGES ================= */
+
+export const uploadEventImages = async (req: any, res: any) => {
+  try {
+    const event: any = await Event.findById(req.params.id);
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    const files = req.files as any[];
+
+    if (!files || files.length === 0) {
+      return error(res, "Images required");
+    }
+    const existingImages = event.images?.length || 0;
+
+if (existingImages + files.length > 5) {
+  return error(
+    res,
+    `Maximum 5 images allowed per event`
+  );
+}
+
+    const uploadedImages = files.map((file: any) => ({
+  url: file.path,
+
+  publicId:
+    file.filename || file.public_id,
+
+  originalName: file.originalname,
+
+  uploadedBy: req.user.id
+}));
+
+  event.images = [
+  ...(event.images || []),
+  ...uploadedImages
+];
+
+    await event.save();
+
+    return success(res, "Images uploaded", event.images);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Upload failed");
+  }
+};
+export const deleteEventImage = async (
+  req: any,
+  res: any
+) => {
+  try {
+    const { id, imageId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid event id");
+    }
+
+    const event: any = await Event.findById(id);
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    /* ================= AUTH ================= */
+
+    const isHost = event.hosts?.some(
+      (h: any) =>
+        h.toString() === req.user.id
+    );
+
+    if (
+      !isHost &&
+      !req.user.roles.includes("ADMIN")
+    ) {
+      return error(res, "Not authorized");
+    }
+
+    /* ================= FIND IMAGE ================= */
+
+    const image = event.images.id(imageId);
+
+    if (!image) {
+      return error(res, "Image not found");
+    }
+
+    /* ================= DELETE CLOUDINARY ================= */
+
+    if (image.publicId) {
+      await cloudinary.uploader
+        .destroy(image.publicId)
+        .catch(() => {});
+    }
+
+    /* ================= REMOVE IMAGE ================= */
+
+    image.deleteOne();
+
+    await event.save();
+
+    return success(
+      res,
+      "Image deleted",
+      event.images
+    );
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Delete failed");
+  }
+};
+
+export const getEventById = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, "Invalid event id");
+    }
+
+    const event = await Event.findById(id)
+      .populate("clubId", "name image banner")
+      .populate("cityId", "name")
+      .populate("venueId", "name")
+      .populate("categoryId", "name")
+      .populate("hosts", "name image instagramId")
+      .lean();
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    return success(res, "Event fetched", event);
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};

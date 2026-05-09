@@ -14,9 +14,30 @@ const fileFilter = (req: any, file: any, cb: any) => {
 const createStorage = (folder: string) =>
   new CloudinaryStorage({
     cloudinary,
-    params: async () => ({
+    params: async (req, file) => ({
       folder,
-      allowed_formats: ["jpg", "png", "jpeg"]
+
+      resource_type: "image",
+
+      allowed_formats: [
+        "jpg",
+        "jpeg",
+        "png",
+        "webp"
+      ],
+
+      transformation: [
+        {
+          quality: "auto",
+          fetch_format: "auto"
+        }
+      ],
+
+      public_id:
+        `${Date.now()}-${file.originalname
+          .split(".")[0]
+          .replace(/\s+/g, "-")
+          .toLowerCase()}`
     })
   });
 

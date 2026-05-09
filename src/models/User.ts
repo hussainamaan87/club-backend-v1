@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 
 const schema = new mongoose.Schema(
   {
-    name: { type: String, trim: true },
+    name: {
+      type: String,
+      trim: true
+    },
 
     phone: {
       type: String,
@@ -14,7 +17,9 @@ const schema = new mongoose.Schema(
     email: {
       type: String,
       unique: true,
-      sparse: true
+      sparse: true,
+      trim: true,
+      lowercase: true
     },
 
     roles: {
@@ -29,21 +34,23 @@ const schema = new mongoose.Schema(
 
     dob: Date,
 
-fcmTokens: {
-
-  type: [String],
-
-  default: [],
-
-  index: true
-
-},
     gender: {
       type: String,
       enum: ["MALE", "FEMALE", "OTHER"]
     },
 
-    bio: String
+    bio: String,
+
+    instagramId: {
+      type: String,
+      index: true
+    },
+
+    fcmTokens: {
+      type: [String],
+      default: [],
+      index: true
+    }
   },
   { timestamps: true }
 );

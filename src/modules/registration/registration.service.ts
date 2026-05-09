@@ -10,6 +10,7 @@ import {
   notifyRegistrationRejected,
   notifyCheckin
 } from "../notification/notification.engine";
+import User from "../../models/User";
 
 /* ================= REGISTER ================= */
 
@@ -20,15 +21,55 @@ export const register = async (req: any, res: any) => {
     if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
       return error(res, "Invalid eventId");
     }
+    /* ================= USER ================= */
 
-    /* 🔥 ATOMIC SEAT BOOK */
-    const event = await Event.findOneAndUpdate(
-      { _id: eventId, remaining: { $gt: 0 } },
-      { $inc: { remaining: -1 } },
-      { new: true }
+    const user: any = await User.findById(req.user.id);
+
+    if (!user) {
+      return error(res, "User not found");
+    }
+
+    const profileCompleted =
+      user.name &&
+      user.image &&
+      user.gender &&
+      user.dob;
+    if (!profileCompleted) {
+      return error(
+        res,
+        "Complete profile before registering"
+      );
+    }
+
+    /* ================= DUPLICATE CHECK ================= */
+
+    const existing = await Registration.findOne({
+      userId: req.user.id,
+      eventId
+    });
+
+    if (existing) {
+      return error(res, "Already registered");
+    }
+
+    /* ================= BOOK SEAT ================= */
+
+    const event: any = await Event.findOneAndUpdate(
+      {
+        _id: eventId,
+        remaining: { $gt: 0 }
+      },
+      {
+        $inc: { remaining: -1 }
+      },
+      {
+        new: true
+      }
     );
 
-    if (!event) return error(res, "Event full");
+    if (!event) {
+      return error(res, "Event full");
+    }
 
     try {
       await Registration.create({
@@ -38,15 +79,13 @@ export const register = async (req: any, res: any) => {
 
       return success(res, "Registration successful");
 
-    } catch (err: any) {
-      /* 🔥 ROLLBACK SEAT */
-      if (err.code === 11000) {
-        await Event.findByIdAndUpdate(eventId, {
-          $inc: { remaining: 1 }
-        });
+    } catch (err) {
 
-        return error(res, "Already registered");
-      }
+      /* ===== ROLLBACK ===== */
+
+      await Event.findByIdAndUpdate(eventId, {
+        $inc: { remaining: 1 }
+      });
 
       throw err;
     }
@@ -265,5 +304,141 @@ export const getQR = async (req: any, res: any) => {
   } catch (err) {
     console.error(err);
     return error(res, "Failed to generate QR");
+  }
+};
+
+/* ================= PREVIEW QR ================= */
+
+export const previewQR = async (req: any, res: any) => {
+  try {
+    const { code } = req.params;
+
+    const reg: any = await Registration.findOne({
+      passCode: code
+    })
+      .populate(
+        "userId",
+        "name image bio gender instagramId email"
+      )
+      .populate("eventId", "title");
+
+    if (!reg) {
+      return error(res, "Invalid QR");
+    }
+
+    const event: any = reg.eventId;
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+return success(res, "QR preview", {
+  registrationId: reg._id,
+  status: reg.status,
+  used: reg.used,
+
+  canApprove:
+    reg.status === "PENDING",
+
+  canCheckin:
+    reg.status === "APPROVED" &&
+    !reg.used,
+
+  user: reg.userId,
+
+  event: {
+    id: event._id,
+    title: event.title
+  }
+});
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
+  }
+};
+/* ================= APPROVE + CHECKIN ================= */
+
+export const approveAndCheckin = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const reg: any = await Registration.findById(id)
+      .populate("eventId");
+
+    if (!reg) {
+      return error(res, "Registration not found");
+    }
+
+    const event: any = reg.eventId;
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    /* ================= HOST VALIDATION ================= */
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (!isHost && !req.user.roles.includes("ADMIN")) {
+      return error(res, "Not authorized");
+    }
+
+    /* ================= ALREADY USED ================= */
+
+    if (reg.used) {
+      return error(res, "Already checked in");
+    }
+
+    /* ================= AUTO APPROVE ================= */
+
+    if (reg.status === "PENDING") {
+      reg.status = "APPROVED";
+
+      reg.passCode =
+        reg.passCode ||
+        `EV-${event._id.toString().slice(-4)}-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 6)
+          .toUpperCase()}`;
+
+      await notifyRegistrationApproved(reg).catch(console.error);
+    }
+
+    /* ================= INVALID STATUS ================= */
+
+    if (
+      reg.status !== "APPROVED" &&
+      reg.status !== "CHECKED_IN"
+    ) {
+      return error(res, "Registration not approved");
+    }
+
+    /* ================= CHECK-IN ================= */
+
+    reg.used = true;
+    reg.status = "CHECKED_IN";
+
+    await reg.save();
+
+    /* ================= NOTIFICATION ================= */
+
+    notifyCheckin(reg).catch(console.error);
+
+    return success(res, "Approved and checked in", {
+      registrationId: reg._id,
+      status: reg.status,
+      used: reg.used
+    });
+
+  } catch (err) {
+    console.error(err);
+    return error(res, "Failed");
   }
 };
