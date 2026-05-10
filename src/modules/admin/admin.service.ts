@@ -414,36 +414,67 @@ export const updateTrendingScore = async (req: any, res: any) => {
   }
 };
 
-export const updateCity = async (req: any, res: any) => {
+export const updateCity = async (
+  req: any,
+  res: any
+) => {
   try {
     const { id } = req.params;
-    const name = req.body.name?.trim();
 
-    if (!name) return error(res, "Name required");
+    const {
+      name,
+      state,
+      pinCode
+    } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return error(res, "Invalid city id");
     }
 
-    const exists = await City.findOne({
-      _id: { $ne: id },
-      name: { $regex: `^${name}$`, $options: "i" }
-    });
+    const city: any =
+      await City.findById(id);
 
-    if (exists) return error(res, "City already exists");
+    if (!city) {
+      return error(res, "City not found");
+    }
 
-    const city = await City.findByIdAndUpdate(
-      id,
-      { name },
-      { new: true }
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return error(res, "Name required");
+      }
+
+      city.name = name.trim();
+    }
+
+    if (state !== undefined) {
+      if (!state.trim()) {
+        return error(res, "State required");
+      }
+
+      city.state =
+        state.trim().toUpperCase();
+    }
+
+    if (pinCode !== undefined) {
+      city.pinCode =
+        pinCode?.trim() || null;
+    }
+
+    await city.save();
+
+    return success(
+      res,
+      "City updated",
+      city
     );
 
-    if (!city) return error(res, "City not found");
-
-    return success(res, "City updated", city);
   } catch (err) {
     console.error(err);
-    return error(res, "Failed to update city");
+
+    return error(
+      res,
+      "Failed to update city"
+    );
   }
 };
 
