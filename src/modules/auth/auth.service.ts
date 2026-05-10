@@ -76,7 +76,7 @@ export const sendOtp = async (req: any, res: any) => {
     console.log(`OTP for ${phone}: ${otp}`);
 
     /* 🔥 ASYNC SEND */
-    sendTelegram(`OTP for ${phone}: ${otp}`).catch(() => {});
+    sendTelegram(`OTP for ${phone}: ${otp}`).catch(() => { });
 
     return success(res, "OTP sent");
 
@@ -187,7 +187,7 @@ export const getMe = async (req: any, res: any) => {
       instagramId: user.instagramId,
 
       profileCompleted: isProfileComplete(user),
-profileProgress: getProfileProgress(user),
+      profileProgress: getProfileProgress(user),
       isAdmin: user.roles.includes("ADMIN"),
       isHost: user.roles.includes("HOST")
     });
@@ -276,7 +276,7 @@ export const updateProfileImage = async (req: any, res: any) => {
 
     /* 🔥 DELETE OLD IMAGE */
     if (user.imagePublicId) {
-      await cloudinary.uploader.destroy(user.imagePublicId).catch(() => {});
+      await cloudinary.uploader.destroy(user.imagePublicId).catch(() => { });
     }
 
     user.image = req.file.path;
@@ -323,5 +323,54 @@ export const saveFcmToken = async (req: any, res: any) => {
   } catch (err) {
     console.error(err);
     return error(res, "Failed");
+  }
+};
+
+export const searchUsersPublic = async (
+  req: any,
+  res: any
+) => {
+  try {
+    const { search } = req.query;
+
+    const filter = search
+      ? {
+        $or: [
+          {
+            name: {
+              $regex: search,
+              $options: "i"
+            }
+          },
+          {
+            instagramId: {
+              $regex: search,
+              $options: "i"
+            }
+          }
+        ]
+      }
+      : {};
+
+    const users = await User.find(filter)
+      .select(
+        "name image bio instagramId"
+      )
+      .limit(50)
+      .lean();
+
+    return success(
+      res,
+      "Users fetched",
+      users
+    );
+
+  } catch (err) {
+    console.error(err);
+
+    return error(
+      res,
+      "Failed"
+    );
   }
 };

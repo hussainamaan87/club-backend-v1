@@ -9,7 +9,7 @@ import {
 import { auth } from "../../middleware/auth.middleware";
 
 import { uploadUser } from "../../middleware/upload.middleware";
-import { updateProfileImage } from "./auth.service";
+import { searchUsersPublic, updateProfileImage } from "./auth.service";
 import { error, success } from "../../utils/response";
 import User from "../../models/User";
 
@@ -32,6 +32,11 @@ router.patch(
   updateProfileImage
 );
 
+router.get(
+  "/users",
+  auth,
+  searchUsersPublic
+);
 router.post("/fcm-token", auth, saveFcmToken);
 
 export default router;
