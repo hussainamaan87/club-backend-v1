@@ -46,14 +46,6 @@ router.patch(
   controller.hostEditEvent
 );
 
-/* ================= HOST EDIT ================= */
-
-router.patch(
-  "/:id/host-edit",
-  auth,
-  allow(["HOST", "ADMIN"]),
-  controller.hostEditEvent
-);
 
 /* ================= EVENT BANNER ================= */
 

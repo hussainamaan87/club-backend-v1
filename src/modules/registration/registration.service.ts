@@ -317,71 +317,202 @@ export const reject = async (req: any, res: any) => {
 
 /* ================= CHECK-IN ================= */
 
-export const checkin = async (req: any, res: any) => {
+/* ================= CHECK-IN ================= */
+
+export const checkin = async (
+  req: any,
+  res: any
+) => {
   try {
-    let { qr } = req.body;
 
-if (!qr) {
+    let qr =
+      req.body.qr ||
+      req.body.code;
 
-  return error(res, "QR required");
+    const {
+      eventId
+    } = req.body;
 
-}
-
-let code = qr;
-
-try {
-
-  const parsed = JSON.parse(qr);
-
-  code = parsed.code;
-
-} catch {}
-
-try {
-
-  const parsed = JSON.parse(code);
-
-  code = parsed.code;
-
-} catch {}
-
-    const reg: any = await Registration.findOne({ passCode: code })
-      .populate("eventId");
-
-    if (!reg) return error(res, "Invalid pass");
-
-    const event: any = reg.eventId;
-
-    if (new Date(event.endTime) < new Date()) {
-
-  return error(res, "Event expired");
-
-}
-    const isHost = event.hosts?.some(
-      (h: any) => h.toString() === req.user.id
-    );
-    
-    if (!isHost && !req.user.roles.includes("ADMIN")) {
-      return error(res, "Not authorized");
+    if (!qr) {
+      return error(res, "QR required");
     }
 
-    if (reg.used) return error(res, "Already used");
-    if (reg.status !== "APPROVED") return error(res, "Not approved");
+    let code = qr;
 
-    /* 🔥 UPDATE */
+    try {
+
+      const parsed =
+        JSON.parse(qr);
+
+      code =
+        parsed.code || qr;
+
+    } catch {}
+
+    try {
+
+      const parsed =
+        JSON.parse(code);
+
+      code =
+        parsed.code || code;
+
+    } catch {}
+
+    const reg: any =
+      await Registration
+        .findOne({
+          passCode: code
+        })
+        .populate("eventId");
+
+    if (!reg) {
+      return error(
+        res,
+        "Invalid pass"
+      );
+    }
+
+    const event: any =
+      reg.eventId;
+
+    if (!event) {
+      return error(
+        res,
+        "Event not found"
+      );
+    }
+
+    /* ================= EVENT MATCH ================= */
+
+    if (
+      eventId &&
+      event._id.toString() !==
+        eventId.toString()
+    ) {
+      return error(
+        res,
+        "QR belongs to different event"
+      );
+    }
+
+    /* ================= EXPIRED ================= */
+
+    if (
+      new Date(event.endTime) <
+      new Date()
+    ) {
+      return error(
+        res,
+        "Event expired"
+      );
+    }
+
+    /* ================= AUTH ================= */
+
+    const isHost =
+      event.hosts?.some(
+        (h: any) =>
+          h.toString() ===
+          req.user.id
+      );
+
+    if (
+      !isHost &&
+      !req.user.roles.includes(
+        "ADMIN"
+      )
+    ) {
+      return error(
+        res,
+        "Not authorized"
+      );
+    }
+
+    /* ================= USED ================= */
+
+    if (reg.used) {
+      return error(
+        res,
+        "Already used"
+      );
+    }
+
+    /* ================= AUTO APPROVE ================= */
+
+    if (
+      reg.status ===
+      "PENDING"
+    ) {
+
+      reg.status =
+        "APPROVED";
+
+      reg.passCode =
+        reg.passCode ||
+        `EV-${event._id
+          .toString()
+          .slice(-4)}-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 6)
+          .toUpperCase()}`;
+
+      await reg.save();
+
+      notifyRegistrationApproved(
+        reg
+      ).catch(
+        console.error
+      );
+    }
+
+    /* ================= VALIDATION ================= */
+
+    if (
+      reg.status !==
+      "APPROVED"
+    ) {
+      return error(
+        res,
+        "Registration not approved"
+      );
+    }
+
+    /* ================= CHECKIN ================= */
+
     reg.used = true;
-    reg.status = "CHECKED_IN";
+
+    reg.status =
+      "CHECKED_IN";
 
     await reg.save();
 
-    /* 🔥 NOTIFICATION */
-    notifyCheckin(reg).catch(console.error);
+    notifyCheckin(reg)
+      .catch(console.error);
 
-    return success(res, "Check-in success");
+    return success(
+      res,
+      "Check-in success",
+      {
+        registrationId:
+          reg._id,
+
+        status:
+          reg.status,
+
+        used:
+          reg.used
+      }
+    );
 
   } catch (err) {
+
     console.error(err);
-    return error(res, "Check-in failed");
+
+    return error(
+      res,
+      "Check-in failed"
+    );
   }
 };
 
@@ -431,83 +562,201 @@ const qr = await QRCode.toDataURL(qrPayload);
 
 export const previewQR = async (req: any, res: any) => {
   try {
-    let { qr } = req.body;
 
-if (!qr) {
+    let qr =
+      req.body.qr ||
+      req.body.code;
 
-  return error(res, "QR required");
+    const {
+      eventId
+    } = req.body;
 
-}
+    if (!qr) {
+      return error(res, "QR required");
+    }
 
-let code = qr;
+    let code = qr;
 
-try {
+    /* ================= PARSE QR ================= */
 
-  const parsed = JSON.parse(qr);
+    try {
 
-  code = parsed.code;
+      const parsed = JSON.parse(qr);
 
-} catch {}
+      code =
+        parsed.code || qr;
 
-try {
+    } catch {}
 
-  const parsed = JSON.parse(code);
+    try {
 
-  code = parsed.code;
+      const parsed = JSON.parse(code);
 
-} catch {}
+      code =
+        parsed.code || code;
 
-    const reg: any = await Registration.findOne({
-      passCode: code
-    })
-      .populate(
-        "userId",
-        "name image bio gender instagramId"
-      )
-      .populate("eventId", "title hosts");
+    } catch {}
+
+    /* ================= FIND REG ================= */
+
+    const reg: any =
+      await Registration.findOne({
+        passCode: code
+      })
+
+        .populate(
+          "userId",
+          `
+          name
+          image
+          bio
+          gender
+          instagramId
+          email
+          `
+        )
+
+        .populate(
+          "eventId",
+          `
+          title
+          hosts
+          `
+        );
 
     if (!reg) {
       return error(res, "Invalid QR");
     }
 
-    const event: any = reg.eventId;
+    const event: any =
+      reg.eventId;
 
-    const isHost = event.hosts?.some(
-      (h: any) => h.toString() === req.user.id
-    );
-    if (new Date(event.endTime) < new Date()) {
-
-  return error(res, "Event expired");
-
-}
-
-    if (!isHost && !req.user.roles.includes("ADMIN")) {
-      return error(res, "Not authorized");
+    if (!event) {
+      return error(res, "Event not found");
     }
 
-    return success(res, "QR preview", {
-      registrationId: reg._id,
-      status: reg.status,
-      used: reg.used,
+    /* ================= OPTIONAL EVENT VALIDATION ================= */
 
-      canApprove:
-        reg.status === "PENDING",
+    if (
+      eventId &&
+      event._id.toString() !==
+        eventId.toString()
+    ) {
+      return error(
+        res,
+        "QR belongs to different event"
+      );
+    }
 
-      canCheckin:
-        reg.status === "APPROVED" &&
-        !reg.used,
+    /* ================= EVENT EXPIRED ================= */
 
-      user: reg.userId,
+    if (
+      new Date(event.endTime) <
+      new Date()
+    ) {
+      return error(
+        res,
+        "Event expired"
+      );
+    }
 
-      event: {
-        id: event._id,
-        title: event.title
+    /* ================= AUTH ================= */
+
+    const isHost =
+      event.hosts?.some(
+        (h: any) =>
+          h.toString() ===
+          req.user.id
+      );
+
+    if (
+      !isHost &&
+      !req.user.roles.includes(
+        "ADMIN"
+      )
+    ) {
+      return error(
+        res,
+        "Not authorized"
+      );
+    }
+
+    /* ================= RESPONSE ================= */
+
+    return success(
+      res,
+      "QR preview",
+      {
+
+        registrationId:
+          reg._id,
+
+        status:
+          reg.status,
+
+        used:
+          reg.used,
+
+        alreadyCheckedIn:
+          reg.used,
+
+        canApprove:
+          reg.status ===
+          "PENDING",
+
+        canCheckin:
+          reg.status ===
+            "APPROVED" &&
+          !reg.used,
+
+        user: {
+          id:
+            reg.userId?._id,
+
+          name:
+            reg.userId?.name ||
+            "",
+
+          image:
+            reg.userId?.image ||
+            "",
+
+          bio:
+            reg.userId?.bio ||
+            "",
+
+          gender:
+            reg.userId?.gender ||
+            "",
+
+          instagramId:
+            reg.userId
+              ?.instagramId ||
+            "",
+
+          email:
+            reg.userId?.email ||
+            ""
+        },
+
+        event: {
+          id:
+            event._id,
+
+          title:
+            event.title
+        }
       }
-    });
+    );
 
   } catch (err) {
+
     console.error(err);
-    return error(res, "Failed");
+
+    return error(
+      res,
+      "Failed"
+    );
   }
 };
 /* ================= APPROVE + CHECKIN ================= */
@@ -634,36 +883,44 @@ export const getAttendanceStats = async (
 
     /* ================= STATS ================= */
 
-    const [
-      total,
-      checkedIn,
-      pending
-    ] = await Promise.all([
+const [
+  total,
+  checkedIn,
+  pending,
+  approved
+] = await Promise.all([
 
-      Registration.countDocuments({
-        eventId
-      }),
+  Registration.countDocuments({
+    eventId
+  }),
 
-      Registration.countDocuments({
-        eventId,
-        status: "CHECKED_IN"
-      }),
+  Registration.countDocuments({
+    eventId,
+    status: "CHECKED_IN"
+  }),
 
-      Registration.countDocuments({
-        eventId,
-        status: "PENDING"
-      })
-    ]);
+  Registration.countDocuments({
+    eventId,
+    status: "PENDING"
+  }),
 
-    return success(
-      res,
-      "Attendance stats fetched",
-      {
-        total,
-        checkedIn,
-        pending
-      }
-    );
+  Registration.countDocuments({
+    eventId,
+    status: "APPROVED"
+  })
+]);
+
+ return success(
+  res,
+  "Attendance stats fetched",
+  {
+    total,
+    checkedIn,
+    pending,
+    approved,
+    eligible: approved + checkedIn
+  }
+);
 
   } catch (err) {
     console.error(err);
