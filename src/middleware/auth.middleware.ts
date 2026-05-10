@@ -18,7 +18,7 @@ export const auth = (req: any, res: any, next: any) => {
   try {
     const token = header.split(" ")[1];
 
-const data = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+    const data = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
 
     // 🔥 safety fallback
     req.user = {
@@ -31,6 +31,8 @@ const data = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
     return res.status(401).json({ success: false, message: "Invalid token" });
   }
 };
+
+
 
 export const allow = (roles: string[]) => {
   return (req: any, res: any, next: any) => {
@@ -49,4 +51,40 @@ export const allow = (roles: string[]) => {
 
     next();
   };
+};
+
+export const optionalAuth = (
+  req: any,
+  res: any,
+  next: any,
+) => {
+
+  try {
+
+    const auth =
+      req.headers.authorization;
+
+    if (
+      !auth ||
+      !auth.startsWith("Bearer ")
+    ) {
+      return next();
+    }
+
+    const token =
+      auth.split(" ")[1];
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET!,
+    );
+
+    req.user = decoded;
+
+    next();
+
+  } catch (e) {
+
+    next();
+  }
 };
