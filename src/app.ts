@@ -13,7 +13,7 @@ import devRoutes from "./modules/dev/dev.routes";
 import clubRoutes from "./modules/club/club.routes";
 import metaRoutes from "./modules/meta/meta.routes";
 
-import { optionalAuth } from "./middlewares/auth.middleware";
+import { optionalAuth } from "./middleware/auth.middleware";
 
 const app = express();
 
