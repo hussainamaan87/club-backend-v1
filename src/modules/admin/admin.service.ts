@@ -93,11 +93,17 @@ export const getCities = async (req: any, res: any) => {
 };
 
 /* ================= VENUE ================= */
-export const createVenue = async (req: any, res: any) => {
+export const createVenue = async (
+  req: any,
+  res: any
+) => {
   try {
-    const { name, cityId } = req.body;
 
-    /* ================= VALIDATION ================= */
+    const {
+      name,
+      cityId,
+      googleMapsUrl
+    } = req.body;
 
     if (!name || !cityId) {
       return error(res, "Missing fields");
@@ -113,15 +119,11 @@ export const createVenue = async (req: any, res: any) => {
       return error(res, "Venue name required");
     }
 
-    /* ================= CHECK CITY ================= */
-
     const city = await City.findById(cityId);
 
     if (!city) {
       return error(res, "City not found");
     }
-
-    /* ================= DUPLICATE CHECK ================= */
 
     const exists = await Venue.findOne({
       name: {
@@ -132,21 +134,35 @@ export const createVenue = async (req: any, res: any) => {
     });
 
     if (exists) {
-      return error(res, "Venue already exists in this city");
+      return error(
+        res,
+        "Venue already exists in this city"
+      );
     }
-
-    /* ================= CREATE ================= */
 
     const venue = await Venue.create({
       name: trimmedName,
-      cityId
+
+      cityId,
+
+      googleMapsUrl:
+        googleMapsUrl?.trim() || null
     });
 
-    return success(res, "Venue created", venue);
+    return success(
+      res,
+      "Venue created",
+      venue
+    );
 
   } catch (err) {
+
     console.error(err);
-    return error(res, "Venue creation failed");
+
+    return error(
+      res,
+      "Venue creation failed"
+    );
   }
 };
 
@@ -511,61 +527,102 @@ export const updateCategory = async (req: any, res: any) => {
   }
 };
 
-export const updateVenue = async (req: any, res: any) => {
+export const updateVenue = async (
+  req: any,
+  res: any
+) => {
   try {
+
     const { id } = req.params;
-    const { name, cityId } = req.body;
+
+    const {
+      name,
+      cityId,
+      googleMapsUrl
+    } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return error(res, "Invalid venue id");
     }
 
-    const venue: any = await Venue.findById(id);
-    if (!venue) return error(res, "Venue not found");
+    const venue: any =
+      await Venue.findById(id);
 
-    /* ================= HANDLE CITY CHANGE ================= */
+    if (!venue) {
+      return error(res, "Venue not found");
+    }
+
     let finalCityId = venue.cityId;
 
     if (cityId) {
+
       if (!mongoose.Types.ObjectId.isValid(cityId)) {
         return error(res, "Invalid cityId");
       }
 
       const city = await City.findById(cityId);
-      if (!city) return error(res, "City not found");
+
+      if (!city) {
+        return error(res, "City not found");
+      }
 
       finalCityId = cityId;
     }
 
-    /* ================= HANDLE NAME ================= */
-    if (name) {
+    if (name !== undefined) {
+
       const trimmedName = name.trim();
+
+      if (!trimmedName) {
+        return error(res, "Venue name required");
+      }
 
       const exists = await Venue.findOne({
         _id: { $ne: id },
-        name: { $regex: `^${trimmedName}$`, $options: "i" },
+
+        name: {
+          $regex: `^${trimmedName}$`,
+          $options: "i"
+        },
+
         cityId: finalCityId
       });
 
       if (exists) {
-        return error(res, "Venue already exists in this city");
+        return error(
+          res,
+          "Venue already exists in this city"
+        );
       }
 
       venue.name = trimmedName;
     }
 
-    /* ================= APPLY CITY UPDATE ================= */
-    if (cityId) {
+    if (cityId !== undefined) {
       venue.cityId = cityId;
+    }
+
+    if (googleMapsUrl !== undefined) {
+      venue.googleMapsUrl =
+        googleMapsUrl?.trim() || null;
     }
 
     await venue.save();
 
-    return success(res, "Venue updated", venue);
+    return success(
+      res,
+      "Venue updated",
+      venue
+    );
 
   } catch (err) {
+
     console.error(err);
-    return error(res, "Failed to update venue");
+
+    return error(
+      res,
+      "Failed to update venue"
+    );
   }
 };
 
