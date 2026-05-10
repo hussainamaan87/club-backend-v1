@@ -40,10 +40,10 @@ router.get(
 );
 
 router.patch(
-  "/:id/host-edit",
+  "/:id",
   auth,
   allow(["HOST", "ADMIN"]),
-  controller.hostEditEvent
+  controller.updateEvent
 );
 
 

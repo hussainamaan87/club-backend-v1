@@ -9,7 +9,7 @@ import { getPagination } from "../../utils/pagination";
 import cloudinary from "../../utils/cloudinary";
 import Favorite from "../../models/Favorite";
 import { sendNotification } from "../notification/notification.service";
-import { notifyNewEvent } from "../notification/notification.manager";
+import { notifyEventUpdateToAll, notifyNewEvent } from "../notification/notification.manager";
 import City from "../../models/City";
 import Registration from "../../models/Registration";
 
@@ -38,6 +38,22 @@ export const getEvents = async (req: any, res: any) => {
     const { page, limit, skip } = getPagination(req);
 
     const filter: any = {};
+    if (req.query.search) {
+  filter.$or = [
+    {
+      title: {
+        $regex: req.query.search,
+        $options: "i"
+      }
+    },
+    {
+      desc: {
+        $regex: req.query.search,
+        $options: "i"
+      }
+    }
+  ];
+}
 
     if (req.query.cityId) {
       if (!mongoose.Types.ObjectId.isValid(req.query.cityId)) {
@@ -352,63 +368,328 @@ export const createEvent = async (req: any, res: any) => {
 
 };
 
-/* ================= HOST EDIT ================= */
-
-export const hostEditEvent = async (req: any, res: any) => {
+export const updateEvent = async (
+  req: any,
+  res: any
+) => {
   try {
+
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return error(res, "Invalid event id");
     }
 
-    const event: any = await Event.findById(id);
-    if (!event) return error(res, "Event not found");
+    const event: any =
+      await Event.findById(id);
 
-    const isHost = event.hosts?.some(
-      (h: any) => h.toString() === req.user.id
-    );
+    if (!event) {
+      return error(res, "Event not found");
+    }
 
-    if (!isHost && !req.user.roles.includes("ADMIN")) {
+    /* ================= AUTH ================= */
+
+    const isHost =
+      event.hosts?.some(
+        (h: any) =>
+          h.toString() === req.user.id
+      );
+
+    const isAdmin =
+      req.user.roles.includes("ADMIN");
+
+    if (!isHost && !isAdmin) {
       return error(res, "Not authorized");
     }
 
-    const { desc, startTime, endTime, capacity } = req.body;
+    const {
+      title,
+      desc,
+      startTime,
+      endTime,
+      capacity,
+      cityId,
+      venueId,
+      categoryId,
+      clubId,
+      hosts,
+      isFeatured,
+      trendingScore
+    } = req.body;
 
-    if (desc) event.desc = desc;
+    /* ================= TITLE ================= */
 
-    if (startTime && endTime) {
-      if (new Date(startTime) >= new Date(endTime)) {
-        return error(res, "Invalid timing");
+    if (title !== undefined) {
+
+      if (!title.trim()) {
+        return error(res, "Title required");
       }
-      event.startTime = startTime;
-      event.endTime = endTime;
+
+      event.title = title.trim();
     }
 
-    if (capacity !== undefined) {
-      if (capacity <= 0) return error(res, "Invalid capacity");
+    /* ================= DESC ================= */
 
-      const booked = event.capacity - event.remaining;
+    if (desc !== undefined) {
 
-      if (capacity < booked) {
-        return error(res, "Cannot reduce below booked seats");
+      if (!desc.trim()) {
+        return error(res, "Description required");
       }
 
-      const diff = capacity - event.capacity;
-      event.capacity = capacity;
+      event.desc = desc.trim();
+    }
+
+    /* ================= TIME ================= */
+
+    const finalStart =
+      startTime
+        ? new Date(startTime)
+        : new Date(event.startTime);
+
+    const finalEnd =
+      endTime
+        ? new Date(endTime)
+        : new Date(event.endTime);
+
+    if (finalStart >= finalEnd) {
+      return error(res, "Invalid timing");
+    }
+
+    if (startTime !== undefined) {
+      event.startTime = finalStart;
+    }
+
+    if (endTime !== undefined) {
+      event.endTime = finalEnd;
+    }
+
+    /* ================= CAPACITY ================= */
+
+    if (capacity !== undefined) {
+
+      const parsed =
+        Number(capacity);
+
+      if (
+        isNaN(parsed) ||
+        parsed <= 0
+      ) {
+        return error(res, "Invalid capacity");
+      }
+
+      const booked =
+        event.capacity -
+        event.remaining;
+
+      if (parsed < booked) {
+        return error(
+          res,
+          `Cannot reduce below booked seats (${booked})`
+        );
+      }
+
+      const diff =
+        parsed - event.capacity;
+
+      event.capacity = parsed;
+
       event.remaining += diff;
+    }
+
+    /* ================= CITY ================= */
+
+    if (cityId !== undefined) {
+
+      if (
+        !mongoose.Types.ObjectId.isValid(cityId)
+      ) {
+        return error(res, "Invalid cityId");
+      }
+
+      const city =
+        await City.findById(cityId);
+
+      if (!city) {
+        return error(res, "City not found");
+      }
+
+      event.cityId = cityId;
+    }
+
+    /* ================= CATEGORY ================= */
+
+    if (categoryId !== undefined) {
+
+      if (
+        !mongoose.Types.ObjectId.isValid(categoryId)
+      ) {
+        return error(res, "Invalid categoryId");
+      }
+
+      const category =
+        await Category.findById(categoryId);
+
+      if (!category) {
+        return error(res, "Category not found");
+      }
+
+      event.categoryId = categoryId;
+    }
+
+    /* ================= CLUB ================= */
+
+    if (clubId !== undefined) {
+
+      if (
+        !mongoose.Types.ObjectId.isValid(clubId)
+      ) {
+        return error(res, "Invalid clubId");
+      }
+
+      const club =
+        await Club.findById(clubId);
+
+      if (!club) {
+        return error(res, "Club not found");
+      }
+
+      event.clubId = clubId;
+    }
+
+    /* ================= VENUE ================= */
+
+    if (venueId !== undefined) {
+
+      if (
+        !mongoose.Types.ObjectId.isValid(venueId)
+      ) {
+        return error(res, "Invalid venueId");
+      }
+
+      const venue: any =
+        await Venue.findById(venueId);
+
+      if (!venue) {
+        return error(res, "Venue not found");
+      }
+
+      const finalCityId =
+        cityId || event.cityId;
+
+      if (
+        venue.cityId.toString() !==
+        finalCityId.toString()
+      ) {
+        return error(
+          res,
+          "Venue does not belong to city"
+        );
+      }
+
+      event.venueId = venueId;
+    }
+
+    /* ================= HOSTS ================= */
+
+    if (hosts !== undefined) {
+
+      if (
+        !Array.isArray(hosts) ||
+        hosts.length === 0
+      ) {
+        return error(
+          res,
+          "Hosts must be non-empty array"
+        );
+      }
+
+      const uniqueHosts =
+        [...new Set(hosts)];
+
+      const users =
+        await User.find({
+          _id: {
+            $in: uniqueHosts
+          }
+        });
+
+      if (
+        users.length !== uniqueHosts.length
+      ) {
+        return error(
+          res,
+          "Some hosts not found"
+        );
+      }
+
+      const invalidHost =
+        users.find(
+          (u: any) =>
+            !u.roles.includes("HOST")
+        );
+
+      if (invalidHost) {
+        return error(
+          res,
+          "Only HOST users allowed"
+        );
+      }
+
+      event.hosts = uniqueHosts;
+
+      /* 🔥 NOTIFY NEW HOSTS */
+
+      for (const hostId of uniqueHosts) {
+
+        sendNotification({
+          userId: hostId.toString(),
+          title: "🎉 Event Host Assigned",
+          body:
+            `You are now host for "${event.title}"`,
+          type: "HOST_ASSIGNED",
+          data: {
+            eventId: event._id
+          }
+        }).catch(() => {});
+      }
+    }
+
+    /* ================= ADMIN ONLY ================= */
+
+    if (isAdmin) {
+
+      if (isFeatured !== undefined) {
+        event.isFeatured =
+          !!isFeatured;
+      }
+
+      if (trendingScore !== undefined) {
+        event.trendingScore =
+          Number(trendingScore) || 0;
+      }
     }
 
     await event.save();
 
-    return success(res, "Event updated", event);
+    notifyEventUpdateToAll(event)
+      .catch(() => {});
+
+    return success(
+      res,
+      "Event updated",
+      event
+    );
 
   } catch (err) {
+
     console.error(err);
-    return error(res, "Failed to update event");
+
+    return error(
+      res,
+      "Failed to update event"
+    );
   }
 };
-
 /* ================= UPDATE EVENT BANNER ================= */
 
 export const updateEventBanner = async (req: any, res: any) => {
@@ -569,13 +850,23 @@ export const deleteEventImage = async (
   res: any
 ) => {
   try {
+
     const { id, imageId } = req.params;
+
+    /* ================= VALIDATION ================= */
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return error(res, "Invalid event id");
     }
 
-    const event: any = await Event.findById(id);
+    if (!mongoose.Types.ObjectId.isValid(imageId)) {
+      return error(res, "Invalid image id");
+    }
+
+    /* ================= EVENT ================= */
+
+    const event: any =
+      await Event.findById(id);
 
     if (!event) {
       return error(res, "Event not found");
@@ -583,39 +874,58 @@ export const deleteEventImage = async (
 
     /* ================= AUTH ================= */
 
-    const isHost = event.hosts?.some(
-      (h: any) =>
-        h.toString() === req.user.id
-    );
+    const isHost =
+      event.hosts?.some(
+        (h: any) =>
+          h.toString() === req.user.id
+      );
 
-    if (
-      !isHost &&
-      !req.user.roles.includes("ADMIN")
-    ) {
+    const isAdmin =
+      req.user.roles?.includes("ADMIN");
+
+    if (!isHost && !isAdmin) {
       return error(res, "Not authorized");
     }
 
     /* ================= FIND IMAGE ================= */
 
-    const image = event.images.id(imageId);
+    const imageIndex =
+      event.images.findIndex(
+        (img: any) =>
+          img._id?.toString() === imageId
+      );
 
-    if (!image) {
+    if (imageIndex === -1) {
       return error(res, "Image not found");
     }
+
+    const image =
+      event.images[imageIndex];
 
     /* ================= DELETE CLOUDINARY ================= */
 
     if (image.publicId) {
+
       await cloudinary.uploader
         .destroy(image.publicId)
-        .catch(() => { });
+        .catch((err) => {
+          console.error(
+            "Cloudinary delete failed:",
+            err
+          );
+        });
     }
 
     /* ================= REMOVE IMAGE ================= */
 
-    image.deleteOne();
+    event.images.splice(
+      imageIndex,
+      1
+    );
 
     await event.save();
+
+    /* ================= RESPONSE ================= */
 
     return success(
       res,
@@ -624,8 +934,13 @@ export const deleteEventImage = async (
     );
 
   } catch (err) {
+
     console.error(err);
-    return error(res, "Delete failed");
+
+    return error(
+      res,
+      "Delete failed"
+    );
   }
 };
 

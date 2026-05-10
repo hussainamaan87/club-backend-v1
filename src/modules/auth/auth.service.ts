@@ -16,8 +16,11 @@ const isProfileComplete = (user: any) => {
   return !!(
     user.name &&
     user.image &&
-    user.gender &&
-    user.dob
+  user.gender &&
+  user.dob &&
+  user.bio &&
+  user.instagramId &&
+  user.email
   );
 };
 
@@ -218,7 +221,9 @@ export const updateProfile = async (req: any, res: any) => {
     }
 
     if (name !== undefined) {
-      user.name = name.trim();
+      if (typeof name === "string") {
+        user.name = name.trim();
+      }
     }
 
     if (bio !== undefined) {

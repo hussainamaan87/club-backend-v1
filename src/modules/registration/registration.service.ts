@@ -30,11 +30,14 @@ export const register = async (req: any, res: any) => {
       return error(res, "User not found");
     }
 
-    const profileCompleted =
-      user.name &&
-      user.image &&
-      user.gender &&
-      user.dob;
+ const profileCompleted =
+  user.name &&
+  user.image &&
+  user.gender &&
+  user.dob &&
+  user.bio &&
+  user.instagramId &&
+  user.email;
 
     if (!profileCompleted) {
       return error(
