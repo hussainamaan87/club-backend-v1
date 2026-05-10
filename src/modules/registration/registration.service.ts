@@ -598,3 +598,79 @@ if (reg.status === "PENDING") {
     return error(res, "Failed");
   }
 };
+/* ================= ATTENDANCE STATS ================= */
+
+export const getAttendanceStats = async (
+  req: any,
+  res: any
+) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return error(res, "Invalid eventId");
+    }
+
+    /* ================= EVENT ================= */
+
+    const event: any = await Event.findById(eventId);
+
+    if (!event) {
+      return error(res, "Event not found");
+    }
+
+    /* ================= AUTH ================= */
+
+    const isHost = event.hosts?.some(
+      (h: any) => h.toString() === req.user.id
+    );
+
+    if (
+      !isHost &&
+      !req.user.roles.includes("ADMIN")
+    ) {
+      return error(res, "Not authorized");
+    }
+
+    /* ================= STATS ================= */
+
+    const [
+      total,
+      checkedIn,
+      pending
+    ] = await Promise.all([
+
+      Registration.countDocuments({
+        eventId
+      }),
+
+      Registration.countDocuments({
+        eventId,
+        status: "CHECKED_IN"
+      }),
+
+      Registration.countDocuments({
+        eventId,
+        status: "PENDING"
+      })
+    ]);
+
+    return success(
+      res,
+      "Attendance stats fetched",
+      {
+        total,
+        checkedIn,
+        pending
+      }
+    );
+
+  } catch (err) {
+    console.error(err);
+
+    return error(
+      res,
+      "Failed to fetch attendance stats"
+    );
+  }
+};

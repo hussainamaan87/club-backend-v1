@@ -11,3 +11,4 @@ export const checkin = service.checkin;
 export const getQR = service.getQR;
 export const previewQR = service.previewQR;
 export const approveAndCheckin = service.approveAndCheckin;
+export const getAttendanceStats =service.getAttendanceStats;

@@ -39,6 +39,13 @@ router.get(
   controller.getEventById
 );
 
+router.patch(
+  "/:id/host-edit",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.hostEditEvent
+);
+
 /* ================= HOST EDIT ================= */
 
 router.patch(

@@ -8,3 +8,4 @@ export const getEventById = service.getEventById;
 export const getMyEvents = service.getMyEvents;
 export const uploadEventImages = service.uploadEventImages;
 export const deleteEventImage = service.deleteEventImage;
+export const hostEditEvent

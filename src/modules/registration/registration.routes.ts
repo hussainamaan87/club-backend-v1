@@ -53,4 +53,10 @@ router.post(
   controller.checkin
 );
 
+router.get(
+  "/event/:eventId/attendance-stats",
+  auth,
+  allow(["HOST", "ADMIN"]),
+  controller.getAttendanceStats
+);
 export default router;

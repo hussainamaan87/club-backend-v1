@@ -152,7 +152,7 @@ export const createVenue = async (req: any, res: any) => {
 
 export const getVenues = async (req: any, res: any) => {
   try {
-    const venues = await Venue.find().populate("cityId").lean();
+    const venues = await Venue.find().populate("cityId","name state").sort({ name: 1 }).lean();
     return success(res, "Venues fetched", venues);
   } catch (err) {
     console.error(err);

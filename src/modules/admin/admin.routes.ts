@@ -1,50 +1,153 @@
 import express from "express";
+
 import { auth, allow } from "../../middleware/auth.middleware";
+
 import * as controller from "./admin.controller";
+
 import { uploadClub } from "../../middleware/upload.middleware";
 
 const router = express.Router();
 
-// 🔐 ADMIN ONLY
-router.use(auth, allow(["ADMIN"]));
+/* =====================================================
+   AUTH
+===================================================== */
 
-/* ================= CITY ================= */
-router.post("/cities", controller.createCity);
-router.get("/cities", controller.getCities);
+router.use(
+    auth,
+    allow(["ADMIN"])
+);
 
-/* ================= VENUE ================= */
-router.post("/venue", controller.createVenue);
-router.get("/venue", controller.getVenues);
+/* =====================================================
+   CITY
+===================================================== */
 
-/* ================= CLUB ================= */
-router.post("/club", uploadClub.single("image"), controller.createClub);
-router.get("/club", controller.getClubs);
-router.patch("/club/:id/image", uploadClub.single("image"), controller.updateClubImage);
-router.patch("/club/:id/banner", uploadClub.single("banner"), controller.updateClubBanner);
-router.patch("/club/:id", controller.editClub);
+router
+    .route("/cities")
+    .post(controller.createCity)
+    .get(controller.getCities);
 
-/* ================= USER ================= */
-router.post("/user/host", controller.createHost);
-router.patch("/user/:id/role", controller.updateUserRole);
-router.get("/user/search", controller.searchUsers);
+router.patch(
+    "/cities/:id",
+    controller.updateCity
+);
 
-/* ================= CATEGORY ================= */
-router.post("/category", controller.createCategory);
-router.get("/category", controller.getCategories);
+/* =====================================================
+   VENUE
+===================================================== */
 
-/* ================= EVENT ================= */
-router.get("/event", controller.getAllEvents);
-router.get("/event/:id", controller.getEventById);
-router.patch("/event/:id/feature", controller.toggleFeatureEvent);
-router.patch("/event/:id/trending", controller.updateTrendingScore);
-router.patch("/event/:id", controller.adminEditEvent);
-router.patch("/event/:id/hosts", controller.updateEventHosts);
+router
+    .route("/venues")
+    .post(controller.createVenue)
+    .get(controller.getVenues);
 
+router.patch(
+    "/venues/:id",
+    controller.updateVenue
+);
 
-/* ================= UPDATE ================= */
-router.patch("/cities/:id", controller.updateCity);
-router.patch("/category/:id", controller.updateCategory);
-router.patch("/venue/:id", controller.updateVenue);
-router.get("/dashboard", controller.getDashboardStats);
+/* =====================================================
+   CLUB
+===================================================== */
+
+router
+    .route("/clubs")
+    .post(
+        uploadClub.single("image"),
+        controller.createClub
+    )
+    .get(controller.getClubs);
+
+router.patch(
+    "/clubs/:id",
+    controller.editClub
+);
+
+router.patch(
+    "/clubs/:id/image",
+    uploadClub.single("image"),
+    controller.updateClubImage
+);
+
+router.patch(
+    "/clubs/:id/banner",
+    uploadClub.single("banner"),
+    controller.updateClubBanner
+);
+
+/* =====================================================
+   USER
+===================================================== */
+
+router.post(
+    "/users/host",
+    controller.createHost
+);
+
+router.patch(
+    "/users/:id/role",
+    controller.updateUserRole
+);
+
+router.get(
+    "/users/search",
+    controller.searchUsers
+);
+
+/* =====================================================
+   CATEGORY
+===================================================== */
+
+router
+    .route("/categories")
+    .post(controller.createCategory)
+    .get(controller.getCategories);
+
+router.patch(
+    "/categories/:id",
+    controller.updateCategory
+);
+
+/* =====================================================
+   EVENT
+===================================================== */
+
+router.get(
+    "/events",
+    controller.getAllEvents
+);
+
+router.get(
+    "/events/:id",
+    controller.getEventById
+);
+
+router.patch(
+    "/events/:id",
+    controller.adminEditEvent
+);
+
+router.patch(
+    "/events/:id/feature",
+    controller.toggleFeatureEvent
+);
+
+router.patch(
+    "/events/:id/trending",
+    controller.updateTrendingScore
+);
+
+router.patch(
+    "/events/:id/hosts",
+    controller.updateEventHosts
+);
+
+/* =====================================================
+   DASHBOARD
+===================================================== */
+
+router.get(
+    "/dashboard",
+    controller.getDashboardStats
+);
 
 export default router;
