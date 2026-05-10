@@ -24,6 +24,50 @@ app.use(cors({
 
 app.use(express.json());
 
+app.use((req: any, res: any, next: any) => {
+
+  const start = Date.now();
+
+  console.log("\n==============================");
+  console.log("API:", req.method, req.originalUrl);
+
+  console.log("QUERY:", req.query);
+
+  console.log("BODY:", req.body);
+
+  console.log(
+    "USER:",
+    req.user?.id || "guest"
+  );
+
+  // capture response
+  const oldJson = res.json;
+
+  res.json = function (data: any) {
+
+    console.log(
+      "STATUS:",
+      res.statusCode
+    );
+
+    console.log(
+      "RESPONSE:",
+      JSON.stringify(data, null, 2)
+    );
+
+    console.log(
+      "TIME:",
+      `${Date.now() - start}ms`
+    );
+
+    console.log("==============================\n");
+
+    return oldJson.call(this, data);
+  };
+
+  next();
+});
+
 app.get("/", (req, res) => {
   res.json({
     message: "Welcome to the Club App API"
