@@ -1,44 +1,57 @@
 import express from "express";
-import { auth, allow } from "../../middleware/auth.middleware";
-import * as controller from "./event.controller";
-import { uploadEvent } from "../../middleware/upload.middleware";
+
+import {
+  auth,
+  allow
+} from "../../middleware/auth.middleware";
+
+import {
+  uploadEvent
+} from "../../middleware/upload.middleware";
+
+import * as controller
+  from "./event.controller";
 
 const router = express.Router();
 
-/* ================= EVENTS ================= */
+/* ================= PUBLIC ================= */
 
-router.get(
-  "/",
-  auth,
-  controller.getEvents
-);
+/**
+ * GET /events
+ */
+router.get("/", controller.getEvents);
 
-/* ================= MY EVENTS ================= */
-
+/**
+ * GET /events/my
+ */
 router.get(
   "/my",
   auth,
   allow(["HOST", "ADMIN"]),
   controller.getMyEvents
 );
+/**
+ * GET /events/:id
+ */
+router.get("/:id", controller.getEventById);
 
-/* ================= CREATE EVENT ================= */
+/* ================= HOST/ADMIN ================= */
 
+
+
+/**
+ * POST /events
+ */
 router.post(
   "/",
   auth,
-  allow(["ADMIN"]),
+  allow(["HOST", "ADMIN"]),
   controller.createEvent
 );
 
-/* ================= EVENT DETAILS ================= */
-
-router.get(
-  "/:id",
-  auth,
-  controller.getEventById
-);
-
+/**
+ * PATCH /events/:id
+ */
 router.patch(
   "/:id",
   auth,
@@ -46,19 +59,20 @@ router.patch(
   controller.updateEvent
 );
 
-
-/* ================= EVENT BANNER ================= */
-
+/**
+ * PATCH /events/:id/banner
+ */
 router.patch(
   "/:id/banner",
   auth,
-  allow(["ADMIN"]),
+  allow(["HOST", "ADMIN"]),
   uploadEvent.single("banner"),
   controller.updateEventBanner
 );
 
-/* ================= EVENT IMAGES ================= */
-
+/**
+ * PATCH /events/:id/images
+ */
 router.patch(
   "/:id/images",
   auth,
@@ -67,8 +81,9 @@ router.patch(
   controller.uploadEventImages
 );
 
-/* ================= DELETE EVENT IMAGE ================= */
-
+/**
+ * DELETE /events/:id/images/:imageId
+ */
 router.delete(
   "/:id/images/:imageId",
   auth,

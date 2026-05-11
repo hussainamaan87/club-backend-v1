@@ -209,7 +209,14 @@ export const eventRegistrations = async (req: any, res: any) => {
     }
 
     const data = await Registration.find({ eventId })
-      .populate("userId", "name phone")
+      .populate("userId", `
+  name
+  image
+  bio
+  gender
+  instagramId
+  email
+`)
       .lean();
 
     return success(res, "Event registrations", data);

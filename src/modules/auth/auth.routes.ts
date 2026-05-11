@@ -1,42 +1,27 @@
-import express from "express";
-import {
-  sendOtp,
-  verifyOtp,
-  getMe,
-  updateProfile,
-  saveFcmToken
-} from "./auth.controller";
-import { auth } from "../../middleware/auth.middleware";
+import express from 'express';
 
-import { uploadUser } from "../../middleware/upload.middleware";
-import { searchUsersPublic, updateProfileImage } from "./auth.service";
-import { error, success } from "../../utils/response";
-import User from "../../models/User";
+import { auth } from '../../middleware/auth.middleware';
 
+import { uploadUser } from '../../middleware/upload.middleware';
+
+import * as controller from './auth.controller';
 
 const router = express.Router();
 
-/* ================= AUTH ================= */
-router.post("/send-otp", sendOtp);
-router.post("/verify-otp", verifyOtp);
+/* ================= OTP ================= */
+
+router.post('/send-otp', controller.sendOtp);
+
+router.post('/verify-otp', controller.verifyOtp);
 
 /* ================= USER ================= */
-router.get("/me", auth, getMe);
-router.patch("/profile", auth, updateProfile);
 
+router.get('/me', auth, controller.getMe);
 
-router.patch(
-  "/profile/image",
-  auth,
-  uploadUser.single("image"),
-  updateProfileImage
-);
+router.patch('/profile', auth, controller.updateProfile);
 
-router.get(
-  "/users",
-  auth,
-  searchUsersPublic
-);
-router.post("/fcm-token", auth, saveFcmToken);
+router.patch('/profile/image', auth, uploadUser.single('image'), controller.updateProfileImage);
+
+router.post('/fcm-token', auth, controller.saveFcmToken);
 
 export default router;

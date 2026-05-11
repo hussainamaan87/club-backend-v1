@@ -1,25 +1,47 @@
+
 import express from "express";
 import cors from "cors";
 import multer from "multer";
 
-import authRoutes from "./modules/auth/auth.routes";
-import eventRoutes from "./modules/event/event.routes";
-import adminRoutes from "./modules/admin/admin.routes";
-import hostRoutes from "./modules/host/host.routes";
-import registrationRoutes from "./modules/registration/registration.routes";
-import favoriteRoutes from "./modules/favorite/favorite.routes";
-import notificationRoutes from "./modules/notification/notification.routes";
-import devRoutes from "./modules/dev/dev.routes";
-import clubRoutes from "./modules/club/club.routes";
-import metaRoutes from "./modules/meta/meta.routes";
+import authRoutes
+  from "./modules/auth/auth.routes";
 
-import { optionalAuth } from "./middleware/auth.middleware";
+import eventRoutes
+  from "./modules/event/event.routes";
+
+import adminRoutes
+  from "./modules/admin/admin.routes";
+
+import hostRoutes
+  from "./modules/host/host.routes";
+
+import registrationRoutes
+  from "./modules/registration/registration.routes";
+
+import favoriteRoutes
+  from "./modules/favorite/favorite.routes";
+
+import notificationRoutes
+  from "./modules/notification/notification.routes";
+
+import devRoutes
+  from "./modules/dev/dev.routes";
+
+import clubRoutes
+  from "./modules/club/club.routes";
+
+import metaRoutes
+  from "./modules/meta/meta.routes";
+
+import {
+  optionalAuth
+} from "./middleware/auth.middleware";
 
 const app = express();
 
-// ======================================================
-// CORE
-// ======================================================
+/* ======================================================
+   CORE
+====================================================== */
 
 app.use(cors({
   origin: "*",
@@ -28,16 +50,15 @@ app.use(cors({
 
 app.use(express.json());
 
-// ======================================================
-// AUTH PARSER
-// IMPORTANT
-// ======================================================
+/* ======================================================
+   OPTIONAL AUTH
+====================================================== */
 
 app.use(optionalAuth);
 
-// ======================================================
-// LOGGER
-// ======================================================
+/* ======================================================
+   LOGGER
+====================================================== */
 
 app.use((req: any, res: any, next: any) => {
 
@@ -51,27 +72,27 @@ app.use((req: any, res: any, next: any) => {
 
   console.log(
     "QUERY:",
-    req.query,
+    req.query
   );
 
   console.log(
     "BODY:",
-    req.body,
+    req.body
   );
 
   console.log(
     "AUTH HEADER:",
-    req.headers.authorization || "none",
+    req.headers.authorization || "none"
   );
 
   console.log(
     "USER:",
-    req.user?.id || "guest",
+    req.user?.id || "guest"
   );
 
   console.log(
     "ROLES:",
-    req.user?.roles || [],
+    req.user?.roles || []
   );
 
   const oldJson = res.json;
@@ -80,17 +101,17 @@ app.use((req: any, res: any, next: any) => {
 
     console.log(
       "STATUS:",
-      res.statusCode,
+      res.statusCode
     );
 
     console.log(
       "RESPONSE:",
-      JSON.stringify(data, null, 2),
+      JSON.stringify(data, null, 2)
     );
 
     console.log(
       "TIME:",
-      `${Date.now() - start}ms`,
+      `${Date.now() - start}ms`
     );
 
     console.log("==============================\n");
@@ -101,41 +122,88 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-// ======================================================
-// ROUTES
-// ======================================================
+/* ======================================================
+   ROOT
+====================================================== */
 
-app.get("/", (req, res) => {
+app.get("/", (_, res) => {
   res.json({
-    message: "Welcome to Club App API",
+    message: "Welcome to Club App API"
   });
 });
 
+/* ======================================================
+   ROUTES
+====================================================== */
+
 app.use("/auth", authRoutes);
 
+/**
+ * PUBLIC / USER EVENT APIS
+ * GET /events
+ * GET /events/:id
+ */
 app.use("/events", eventRoutes);
 
+/**
+ * ADMIN EVENT APIS
+ * GET /admin/events
+ * GET /admin/events/:id
+ * POST /admin/events
+ * PATCH /admin/events/:id
+ */
 app.use("/admin", adminRoutes);
 
-app.use("/registrations", registrationRoutes);
+/**
+ * USER REGISTRATION APIS
+ * POST /registrations
+ */
+app.use(
+  "/registrations",
+  registrationRoutes
+);
 
+/**
+ * HOST EVENT APIS
+ * GET /host/events
+ * GET /host/events/:id
+ * PATCH /host/events/:id
+ */
 app.use("/host", hostRoutes);
 
+/**
+ * CLUB APIS
+ */
 app.use("/clubs", clubRoutes);
 
-app.use("/favorites", favoriteRoutes);
+/**
+ * FAVORITE APIS
+ * POST /favorites/:eventId
+ */
+app.use(
+  "/favorites",
+  favoriteRoutes
+);
 
-app.use("/notifications", notificationRoutes);
+app.use(
+  "/notifications",
+  notificationRoutes
+);
 
 app.use("/meta", metaRoutes);
 
 app.use("/dev", devRoutes);
 
-// ======================================================
-// ERROR HANDLER
-// ======================================================
+/* ======================================================
+   ERROR HANDLER
+====================================================== */
 
-app.use((err: any, req: any, res: any, next: any) => {
+app.use((
+  err: any,
+  req: any,
+  res: any,
+  next: any
+) => {
 
   console.error(err);
 
@@ -143,21 +211,23 @@ app.use((err: any, req: any, res: any, next: any) => {
 
     return res.status(400).json({
       success: false,
-      message: err.message,
+      message: err.message
     });
   }
 
-  if (err.message === "Only image files allowed") {
-
+  if (
+    err.message ===
+    "Only image files allowed"
+  ) {
     return res.status(400).json({
       success: false,
-      message: err.message,
+      message: err.message
     });
   }
 
   res.status(500).json({
     success: false,
-    message: "Internal Server Error",
+    message: "Internal Server Error"
   });
 });
 
