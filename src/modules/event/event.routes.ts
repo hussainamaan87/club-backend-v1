@@ -66,7 +66,7 @@ router.patch(
   "/:id/banner",
   auth,
   allow(["HOST", "ADMIN"]),
-  uploadEvent.single("banner"),
+  uploadEvent.single("image"),
   controller.updateEventBanner
 );
 

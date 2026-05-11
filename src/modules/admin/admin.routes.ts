@@ -88,7 +88,7 @@ router.patch('/events/:id/hosts', controller.updateEventHosts);
 
 router.patch(
   '/events/:id/banner',
-  uploadEvent.single('banner'),
+  uploadEvent.single('image'),
   eventController.updateEventBanner
 );
 

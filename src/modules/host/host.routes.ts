@@ -78,7 +78,7 @@ router.post('/preview', controller.previewRegistrationQR);
  */
 router.patch(
   '/events/:id/images',
-  uploadEvent.array('images', 4),
+  uploadEvent.array('image', 4),
   eventController.uploadEventImages
 );
 

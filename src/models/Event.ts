@@ -103,7 +103,6 @@ const schema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/* 🔥 INDEXES FOR PERFORMANCE */
 schema.index({ cityId: 1, startTime: 1 });
 schema.index({ categoryId: 1, startTime: 1 });
 schema.index({ isFeatured: 1, startTime: 1 });
