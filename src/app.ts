@@ -64,24 +64,64 @@ app.use((req: any, res: any, next: any) => {
 
   const start = Date.now();
 
-  const user =
-    req.user?.id || "guest";
+  console.log("\n==============================");
 
-  const roles =
-    req.user?.roles?.join(",") || "-";
+  console.log(
+    `API: ${req.method} ${req.originalUrl}`
+  );
 
-  res.on("finish", () => {
+  console.log(
+    "QUERY:",
+    req.query
+  );
 
-    const time =
-      Date.now() - start;
+  console.log(
+    "BODY:",
+    req.body
+  );
+
+  console.log(
+    "AUTH HEADER:",
+    req.headers.authorization || "none"
+  );
+
+  console.log(
+    "USER:",
+    req.user?.id || "guest"
+  );
+
+  console.log(
+    "ROLES:",
+    req.user?.roles || []
+  );
+
+  const oldJson = res.json;
+
+  res.json = function (data: any) {
 
     console.log(
-      `${req.method} ${req.originalUrl} | ${res.statusCode} | ${time}ms | ${user} | ${roles}`
+      "STATUS:",
+      res.statusCode
     );
-  });
+
+    console.log(
+      "RESPONSE:",
+      JSON.stringify(data, null, 2)
+    );
+
+    console.log(
+      "TIME:",
+      `${Date.now() - start}ms`
+    );
+
+    console.log("==============================\n");
+
+    return oldJson.call(this, data);
+  };
 
   next();
 });
+
 /* ======================================================
    ROOT
 ====================================================== */
