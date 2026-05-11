@@ -77,7 +77,7 @@ router.patch(
   "/:id/images",
   auth,
   allow(["HOST", "ADMIN"]),
-  uploadEvent.array("images", 4),
+  uploadEvent.array("image", 4),
   controller.uploadEventImages
 );
 
