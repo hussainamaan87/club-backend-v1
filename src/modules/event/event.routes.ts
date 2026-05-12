@@ -1,94 +1,39 @@
-import express from "express";
+import express from 'express';
 
-import {
-  auth,
-  allow
-} from "../../middleware/auth.middleware";
+import { auth, allow } from '../../middleware/auth.middleware';
 
-import {
-  uploadEvent
-} from "../../middleware/upload.middleware";
+import { uploadEvent } from '../../middleware/upload.middleware';
 
-import * as controller
-  from "./event.controller";
+import * as controller from './event.controller';
 
 const router = express.Router();
 
-/* ================= PUBLIC ================= */
+router.get('/my', auth, allow(['HOST', 'ADMIN']), controller.getMyEvents);
 
-/**
- * GET /events
- */
-router.get("/", controller.getEvents);
+router.get('/', controller.getEvents);
 
-/**
- * GET /events/my
- */
-router.get(
-  "/my",
-  auth,
-  allow(["HOST", "ADMIN"]),
-  controller.getMyEvents
-);
-/**
- * GET /events/:id
- */
-router.get("/:id", controller.getEventById);
+router.get('/:id', controller.getEventById);
 
-/* ================= HOST/ADMIN ================= */
+router.post('/', auth, allow(['HOST', 'ADMIN']), controller.createEvent);
 
+router.patch('/:id', auth, allow(['HOST', 'ADMIN']), controller.updateEvent);
 
-
-/**
- * POST /events
- */
-router.post(
-  "/",
-  auth,
-  allow(["HOST", "ADMIN"]),
-  controller.createEvent
-);
-
-/**
- * PATCH /events/:id
- */
 router.patch(
-  "/:id",
+  '/:id/banner',
   auth,
-  allow(["HOST", "ADMIN"]),
-  controller.updateEvent
-);
-
-/**
- * PATCH /events/:id/banner
- */
-router.patch(
-  "/:id/banner",
-  auth,
-  allow(["HOST", "ADMIN"]),
-  uploadEvent.single("image"),
+  allow(['HOST', 'ADMIN']),
+  uploadEvent.single('image'),
   controller.updateEventBanner
 );
 
-/**
- * PATCH /events/:id/images
- */
 router.patch(
-  "/:id/images",
+  '/:id/images',
   auth,
-  allow(["HOST", "ADMIN"]),
-  uploadEvent.array("image", 4),
+  allow(['HOST', 'ADMIN']),
+  uploadEvent.array('image', 4),
   controller.uploadEventImages
 );
 
-/**
- * DELETE /events/:id/images/:imageId
- */
-router.delete(
-  "/:id/images/:imageId",
-  auth,
-  allow(["HOST", "ADMIN"]),
-  controller.deleteEventImage
-);
+router.delete('/:id/images/:imageId', auth, allow(['HOST', 'ADMIN']), controller.deleteEventImage);
 
 export default router;

@@ -10,31 +10,15 @@ import * as eventController from '../event/event.controller';
 
 const router = express.Router();
 
-/* =====================================================
-   AUTH
-===================================================== */
-
 router.use(auth, allow(['ADMIN']));
-
-/* =====================================================
-   CITY
-===================================================== */
 
 router.route('/cities').post(controller.createCity).get(controller.getCities);
 
 router.patch('/cities/:id', controller.updateCity);
 
-/* =====================================================
-   VENUE
-===================================================== */
-
 router.route('/venues').post(controller.createVenue).get(controller.getVenues);
 
 router.patch('/venues/:id', controller.updateVenue);
-
-/* =====================================================
-   CLUB
-===================================================== */
 
 router
   .route('/clubs')
@@ -47,28 +31,15 @@ router.patch('/clubs/:id/image', uploadClub.single('image'), controller.updateCl
 
 router.patch('/clubs/:id/banner', uploadClub.single('banner'), controller.updateClubBanner);
 
-/* =====================================================
-   USER
-===================================================== */
-
 router.post('/users/host', controller.createHost);
 
 router.patch('/users/:id/role', controller.updateUserRole);
 
 router.get('/users/search', controller.searchUsers);
 
-/* =====================================================
-   CATEGORY
-===================================================== */
-
 router.route('/categories').post(controller.createCategory).get(controller.getCategories);
 
 router.patch('/categories/:id', controller.updateCategory);
-
-/* =====================================================
-   EVENT
-===================================================== */
-
 
 router.get('/events', controller.getAllEvents);
 
@@ -78,31 +49,22 @@ router.post('/events', eventController.createEvent);
 
 router.patch('/events/:id', controller.adminEditEvent);
 
-
 router.patch('/events/:id/feature', controller.toggleFeatureEvent);
 
 router.patch('/events/:id/trending', controller.updateTrendingScore);
 
 router.patch('/events/:id/hosts', controller.updateEventHosts);
 
-
-router.patch(
-  '/events/:id/banner',
-  uploadEvent.single('image'),
-  eventController.updateEventBanner
-);
+router.patch('/events/:id/banner', uploadEvent.single('image'), eventController.updateEventBanner);
 
 router.patch(
   '/events/:id/images',
   uploadEvent.array('image', 4),
   eventController.uploadEventImages
 );
-/* =====================================================
-   DASHBOARD
-===================================================== */
+
+router.delete('/events/:id/images/:imageId', eventController.deleteEventImage);
 
 router.get('/dashboard', controller.getDashboardStats);
-
-
 
 export default router;
