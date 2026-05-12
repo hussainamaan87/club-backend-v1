@@ -354,7 +354,7 @@ export const checkin = async (req: any, res: any) => {
     const checkinStartDate = new Date(checkinStart);
 
     if (now.getTime() < checkinStart) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
 
         message: 'Check-in not started yet',
@@ -525,7 +525,7 @@ export const previewQR = async (req: any, res: any) => {
     const checkinStartDate = new Date(checkinStart);
 
     if (now.getTime() < checkinStart) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
 
         message: 'Check-in not started yet',
@@ -608,7 +608,7 @@ export const approveAndCheckin = async (req: any, res: any) => {
     const checkinStartDate = new Date(checkinStart);
 
     if (now.getTime() < checkinStart) {
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
 
         message: 'Check-in not started yet',
