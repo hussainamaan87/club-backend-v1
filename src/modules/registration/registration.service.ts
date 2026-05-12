@@ -432,13 +432,20 @@ export const getQR = async (req: any, res: any) => {
     }
 
     if (!['APPROVED', 'CHECKED_IN'].includes(reg.status)) {
-      return error(res, 'QR unavailable');
+      return error(
+        res,
+
+        'Registration not approved yet'
+      );
     }
+
+    /* AUTO RECOVER PASSCODE */
 
     if (!reg.passCode) {
-      return error(res, 'PassCode missing');
-    }
+      reg.passCode = generatePassCode(reg.eventId.toString());
 
+      await reg.save();
+    }
     const payload = JSON.stringify({
       registrationId: reg._id.toString(),
 
