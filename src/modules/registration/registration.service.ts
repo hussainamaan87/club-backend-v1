@@ -41,15 +41,6 @@ export const register = async (req: any, res: any) => {
       return error(res, 'Complete profile before registering');
     }
 
-    const existing = await Registration.findOne({
-      userId: req.user.id,
-      eventId,
-    });
-
-    if (existing) {
-      return success(res, 'Already registered', existing);
-    }
-
     const event: any = await Event.findById(eventId);
 
     if (!event) {
@@ -107,8 +98,25 @@ export const register = async (req: any, res: any) => {
       await session.commitTransaction();
 
       return success(res, 'Registration successful', registration[0]);
-    } catch (err) {
+    } catch (err: any) {
       await session.abortTransaction();
+
+      /* 🔥 DUPLICATE REGISTRATION */
+      if (err?.code === 11000) {
+        /* 🔥 RESTORE SEAT */
+        await Event.findByIdAndUpdate(eventId, {
+          $inc: {
+            remaining: 1,
+          },
+        });
+
+        const existing = await Registration.findOne({
+          userId: req.user.id,
+          eventId,
+        });
+
+        return success(res, 'Already registered', existing);
+      }
 
       throw err;
     } finally {
@@ -242,7 +250,6 @@ export const approve = async (req: any, res: any) => {
     if (!isHost && !req.user.roles.includes('ADMIN')) {
       return error(res, 'Not authorized');
     }
-
     if (new Date(event.startTime) <= new Date()) {
       return error(res, 'Event already started');
     }
@@ -322,7 +329,11 @@ export const checkin = async (req: any, res: any) => {
       return error(res, 'QR required');
     }
 
-    const reg: any = await getRegistrationByQR(finalQR);
+    const reg: any = await getRegistrationByQR(
+      finalQR,
+
+      eventId
+    );
 
     if (!reg) {
       return error(res, 'Invalid QR');
@@ -332,6 +343,20 @@ export const checkin = async (req: any, res: any) => {
 
     if (!event) {
       return error(res, 'Event not found');
+    }
+    if (new Date(event.endTime) < new Date()) {
+      return error(res, 'Event expired');
+    }
+    const now = new Date();
+
+    const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
+
+    if (now.getTime() < checkinStart) {
+      return error(
+        res,
+
+        'Check-in not started yet'
+      );
     }
 
     if (eventId && event._id.toString() !== eventId) {
@@ -367,7 +392,7 @@ export const checkin = async (req: any, res: any) => {
     reg.used = true;
 
     reg.status = 'CHECKED_IN';
-
+    reg.checkedInAt = new Date();
     await reg.save();
 
     notifyCheckin(reg).catch(console.error);
@@ -448,7 +473,11 @@ export const previewQR = async (req: any, res: any) => {
       return error(res, 'QR required');
     }
 
-    const reg: any = await getRegistrationByQR(finalQR);
+    const reg: any = await getRegistrationByQR(
+      finalQR,
+
+      eventId
+    );
 
     if (!reg) {
       return error(res, 'Invalid QR');
@@ -470,6 +499,20 @@ export const previewQR = async (req: any, res: any) => {
 
     if (!event) {
       return error(res, 'Event not found');
+    }
+    if (new Date(event.endTime) < new Date()) {
+      return error(res, 'Event expired');
+    }
+    const now = new Date();
+
+    const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
+
+    if (now.getTime() < checkinStart) {
+      return error(
+        res,
+
+        'Check-in not started yet'
+      );
     }
 
     if (eventId && event._id.toString() !== eventId) {
@@ -527,11 +570,20 @@ export const approveAndCheckin = async (req: any, res: any) => {
 
     const event: any = reg.eventId;
 
+    if (!event) {
+      return error(res, 'Event not found');
+    }
+
     if (new Date(event.endTime) < new Date()) {
       return error(res, 'Event expired');
     }
-    if (!event) {
-      return error(res, 'Event not found');
+
+    const now = new Date();
+
+    const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
+
+    if (now.getTime() < checkinStart) {
+      return error(res, 'Check-in not started yet');
     }
 
     /* ================= HOST VALIDATION ================= */
@@ -570,6 +622,7 @@ export const approveAndCheckin = async (req: any, res: any) => {
 
     reg.used = true;
     reg.status = 'CHECKED_IN';
+    reg.checkedInAt = new Date();
 
     await reg.save();
 
@@ -647,5 +700,91 @@ export const getAttendanceStats = async (req: any, res: any) => {
     console.error(err);
 
     return error(res, 'Failed to fetch attendance stats');
+  }
+};
+
+/* ================= GET REGISTRATION BY ID ================= */
+
+export const getRegistrationById = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return error(res, 'Invalid registration id');
+    }
+
+    const registration: any = await Registration.findById(id)
+
+      .populate({
+        path: 'eventId',
+        populate: [
+          {
+            path: 'clubId',
+            select: 'name image banner',
+          },
+          {
+            path: 'cityId',
+            select: 'name',
+          },
+          {
+            path: 'venueId',
+            select: 'name',
+          },
+        ],
+      })
+
+      .populate(
+        'userId',
+        `
+          name
+          image
+          bio
+          instagramId
+          `
+      )
+
+      .lean();
+
+    if (!registration) {
+      return error(res, 'Registration not found');
+    }
+
+    /* ================= AUTH ================= */
+
+    const isOwner = registration.userId?._id?.toString() === req.user.id;
+
+    const isAdmin = req.user.roles.includes('ADMIN');
+
+    const isHost = registration.eventId?.hosts?.some((h: any) => h.toString() === req.user.id);
+
+    if (!isOwner && !isAdmin && !isHost) {
+      return error(res, 'Not authorized');
+    }
+
+    return success(res, 'Registration fetched', {
+      registrationId: registration._id,
+
+      status: registration.status,
+
+      used: registration.used,
+
+      checkedIn: registration.status === 'CHECKED_IN',
+
+      qrAvailable: ['APPROVED', 'CHECKED_IN'].includes(registration.status),
+
+      passCode: registration.passCode,
+
+      createdAt: registration.createdAt,
+
+      checkedInAt: registration.checkedInAt || null,
+
+      event: registration.eventId,
+
+      user: registration.userId,
+    });
+  } catch (err) {
+    console.error(err);
+
+    return error(res, 'Failed to fetch registration');
   }
 };

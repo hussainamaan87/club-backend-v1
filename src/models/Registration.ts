@@ -28,6 +28,9 @@ const schema = new mongoose.Schema(
       index: true,
     },
 
+    checkedInAt: {
+      type: Date,
+    },
     used: {
       type: Boolean,
       default: false,
@@ -36,8 +39,8 @@ const schema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔥 prevent duplicates
 schema.index({ userId: 1, eventId: 1 }, { unique: true });
+
 schema.index(
   { passCode: 1 },
   {
@@ -45,10 +48,25 @@ schema.index(
     sparse: true,
   }
 );
+
 schema.index({
   userId: 1,
   status: 1,
 });
-schema.index({ eventId: 1, status: 1 });
+
+schema.index({
+  eventId: 1,
+  used: 1,
+});
+
+schema.index({
+  eventId: 1,
+  status: 1,
+});
+
+schema.index({
+  eventId: 1,
+  checkedInAt: -1,
+});
 
 export default mongoose.model('Registration', schema);

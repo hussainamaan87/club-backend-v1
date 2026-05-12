@@ -26,6 +26,13 @@ router.get(
   allow(['HOST', 'ADMIN']),
   controller.getAttendanceStats
 );
+router.get(
+  '/:id',
+
+  auth,
+
+  controller.getRegistrationById
+);
 
 router.post('/:id/approve', auth, allow(['HOST', 'ADMIN']), controller.approve);
 
