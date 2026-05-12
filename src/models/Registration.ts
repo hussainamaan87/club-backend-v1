@@ -1,48 +1,54 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const schema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
-      index: true
+      index: true,
     },
 
     eventId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Event",
+      ref: 'Event',
       required: true,
-      index: true
+      index: true,
     },
 
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED", "CHECKED_IN"],
-      default: "PENDING",
-      index: true
+      enum: ['PENDING', 'APPROVED', 'REJECTED', 'CHECKED_IN'],
+      default: 'PENDING',
+      index: true,
     },
 
     passCode: {
       type: String,
-      index: true
+      index: true,
     },
 
     used: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   { timestamps: true }
 );
 
 // 🔥 prevent duplicates
 schema.index({ userId: 1, eventId: 1 }, { unique: true });
-
+schema.index(
+  { passCode: 1 },
+  {
+    unique: true,
+    sparse: true,
+  }
+);
 schema.index({
   userId: 1,
-  status: 1
+  status: 1,
 });
 schema.index({ eventId: 1, status: 1 });
 
-export default mongoose.model("Registration", schema);
+export default mongoose.model('Registration', schema);
