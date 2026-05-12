@@ -351,12 +351,20 @@ export const checkin = async (req: any, res: any) => {
 
     const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
 
-    if (now.getTime() < checkinStart) {
-      return error(
-        res,
+    const checkinStartDate = new Date(checkinStart);
 
-        'Check-in not started yet'
-      );
+    if (now.getTime() < checkinStart) {
+      return res.status(400).json({
+        success: false,
+
+        message: 'Check-in not started yet',
+
+        data: {
+          checkinStartsAt: checkinStartDate,
+
+          eventStartTime: event.startTime,
+        },
+      });
     }
 
     if (eventId && event._id.toString() !== eventId) {
@@ -514,12 +522,20 @@ export const previewQR = async (req: any, res: any) => {
 
     const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
 
-    if (now.getTime() < checkinStart) {
-      return error(
-        res,
+    const checkinStartDate = new Date(checkinStart);
 
-        'Check-in not started yet'
-      );
+    if (now.getTime() < checkinStart) {
+      return res.status(400).json({
+        success: false,
+
+        message: 'Check-in not started yet',
+
+        data: {
+          checkinStartsAt: checkinStartDate,
+
+          eventStartTime: event.startTime,
+        },
+      });
     }
 
     if (eventId && event._id.toString() !== eventId) {
@@ -589,8 +605,20 @@ export const approveAndCheckin = async (req: any, res: any) => {
 
     const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
 
+    const checkinStartDate = new Date(checkinStart);
+
     if (now.getTime() < checkinStart) {
-      return error(res, 'Check-in not started yet');
+      return res.status(400).json({
+        success: false,
+
+        message: 'Check-in not started yet',
+
+        data: {
+          checkinStartsAt: checkinStartDate,
+
+          eventStartTime: event.startTime,
+        },
+      });
     }
 
     /* ================= HOST VALIDATION ================= */
