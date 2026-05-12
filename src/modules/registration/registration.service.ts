@@ -477,6 +477,7 @@ export const getQR = async (req: any, res: any) => {
 };
 
 /* ================= PREVIEW QR ================= */
+/* ================= PREVIEW QR ================= */
 
 export const previewQR = async (req: any, res: any) => {
   try {
@@ -484,19 +485,21 @@ export const previewQR = async (req: any, res: any) => {
 
     const finalQR = qr || code;
 
+    /* ================= VALIDATION ================= */
+
     if (!finalQR) {
       return error(res, 'QR required');
     }
 
-    const reg: any = await getRegistrationByQR(
-      finalQR,
+    /* ================= GET REGISTRATION ================= */
 
-      eventId
-    );
+    const reg: any = await getRegistrationByQR(finalQR, eventId);
 
     if (!reg) {
       return error(res, 'Invalid QR');
     }
+
+    /* ================= POPULATE USER ================= */
 
     await reg.populate(
       'userId',
@@ -510,37 +513,27 @@ export const previewQR = async (req: any, res: any) => {
       `
     );
 
+    /* ================= EVENT ================= */
+
     const event: any = reg.eventId;
 
     if (!event) {
       return error(res, 'Event not found');
     }
+
+    /* ================= EVENT EXPIRED ================= */
+
     if (new Date(event.endTime) < new Date()) {
       return error(res, 'Event expired');
     }
-    const now = new Date();
 
-    const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
-
-    const checkinStartDate = new Date(checkinStart);
-
-    if (now.getTime() < checkinStart) {
-      return res.status(200).json({
-        success: false,
-
-        message: 'Check-in not started yet',
-
-        data: {
-          checkinStartsAt: checkinStartDate.toISOString(),
-
-          eventStartTime: event.startTime,
-        },
-      });
-    }
+    /* ================= EVENT VALIDATION ================= */
 
     if (eventId && event._id.toString() !== eventId) {
       return error(res, 'Wrong event QR');
     }
+
+    /* ================= AUTH ================= */
 
     const isHost = event.hosts?.some((h: any) => h.toString() === req.user.id);
 
@@ -550,6 +543,30 @@ export const previewQR = async (req: any, res: any) => {
       return error(res, 'Not authorized');
     }
 
+    /* ================= CHECK-IN WINDOW ================= */
+
+    const now = new Date();
+
+    const checkinStart = new Date(event.startTime).getTime() - 2 * 60 * 60 * 1000;
+
+    const checkinStarted = now.getTime() >= checkinStart;
+
+    const checkinStartDate = new Date(checkinStart);
+
+    /* ================= STATE ================= */
+
+    const alreadyCheckedIn = reg.used;
+
+    const canApprove = reg.status === 'PENDING' && !reg.used;
+
+    const canCheckin = ['PENDING', 'APPROVED'].includes(reg.status) && !reg.used && checkinStarted;
+
+    const checkInBlocked = !checkinStarted;
+
+    const checkInBlockReason = !checkinStarted ? 'NOT_STARTED' : null;
+
+    /* ================= RESPONSE ================= */
+
     return success(res, 'Preview success', {
       registrationId: reg._id,
 
@@ -557,11 +574,17 @@ export const previewQR = async (req: any, res: any) => {
 
       used: reg.used,
 
-      alreadyCheckedIn: reg.used,
+      alreadyCheckedIn,
 
-      canApprove: reg.status === 'PENDING' && !reg.used,
+      canApprove,
 
-      canCheckin: ['PENDING', 'APPROVED'].includes(reg.status) && !reg.used,
+      canCheckin,
+
+      checkInBlocked,
+
+      checkInBlockReason,
+
+      checkInStartsAt: checkinStartDate.toISOString(),
 
       passCode: reg.passCode || null,
 
