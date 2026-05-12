@@ -169,23 +169,14 @@ export const createEvent = async (req: any, res: any) => {
   try {
     const {
       title,
-
       desc,
-
       clubId,
-
       categoryId,
-
       cityId,
-
       venueId,
-
       capacity,
-
       startTime,
-
       endTime,
-
       hosts = [],
     } = req.body;
 
@@ -359,6 +350,26 @@ export const updateEvent = async (req: any, res: any) => {
       trendingScore,
     } = req.body;
 
+    /* ================= HOST RESTRICTIONS ================= */
+
+if (
+  !isAdmin &&
+  (
+    capacity !== undefined ||
+    cityId !== undefined ||
+    venueId !== undefined ||
+    categoryId !== undefined ||
+    clubId !== undefined ||
+    hosts !== undefined ||
+    isFeatured !== undefined ||
+    trendingScore !== undefined
+  )
+) {
+  return error(
+    res,
+    'Hosts cannot modify protected event fields'
+  );
+}
     /* ================= TITLE ================= */
 
     if (title !== undefined) {
@@ -561,6 +572,14 @@ export const updateEventBanner = async (req: any, res: any) => {
     const event: any = await Event.findById(req.params.id);
 
     if (!event) return error(res, 'Event not found');
+
+    const isHost = event.hosts?.some((h: any) => h.toString() === req.user.id);
+
+    const isAdmin = req.user.roles.includes('ADMIN');
+
+    if (!isHost && !isAdmin) {
+      return error(res, 'Not authorized');
+    }
     if (!req.file) return error(res, 'Banner required');
 
     if (!req.file.mimetype.startsWith('image/')) {
