@@ -360,7 +360,7 @@ export const checkin = async (req: any, res: any) => {
         message: 'Check-in not started yet',
 
         data: {
-          checkinStartsAt: checkinStartDate,
+          checkinStartsAt: checkinStartDate.toISOString(),
 
           eventStartTime: event.startTime,
         },
@@ -531,7 +531,7 @@ export const previewQR = async (req: any, res: any) => {
         message: 'Check-in not started yet',
 
         data: {
-          checkinStartsAt: checkinStartDate,
+          checkinStartsAt: checkinStartDate.toISOString(),
 
           eventStartTime: event.startTime,
         },
@@ -614,7 +614,7 @@ export const approveAndCheckin = async (req: any, res: any) => {
         message: 'Check-in not started yet',
 
         data: {
-          checkinStartsAt: checkinStartDate,
+          checkinStartsAt: checkinStartDate.toISOString(),
 
           eventStartTime: event.startTime,
         },
