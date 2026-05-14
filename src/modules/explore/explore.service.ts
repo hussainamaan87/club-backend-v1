@@ -87,9 +87,11 @@ export const getExploreFeed = async (req: any, res: any) => {
 
     /* ================= FILTER ================= */
 
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+
     const filter: any = {
-      startTime: {
-        $gte: new Date(),
+      endTime: {
+        $gte: tenDaysAgo,
       },
     };
 
