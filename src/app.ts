@@ -1,41 +1,29 @@
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
 
-import express from "express";
-import cors from "cors";
-import multer from "multer";
+import authRoutes from './modules/auth/auth.routes';
 
-import authRoutes
-  from "./modules/auth/auth.routes";
+import eventRoutes from './modules/event/event.routes';
 
-import eventRoutes
-  from "./modules/event/event.routes";
+import adminRoutes from './modules/admin/admin.routes';
 
-import adminRoutes
-  from "./modules/admin/admin.routes";
+import hostRoutes from './modules/host/host.routes';
 
-import hostRoutes
-  from "./modules/host/host.routes";
+import registrationRoutes from './modules/registration/registration.routes';
 
-import registrationRoutes
-  from "./modules/registration/registration.routes";
+import favoriteRoutes from './modules/favorite/favorite.routes';
 
-import favoriteRoutes
-  from "./modules/favorite/favorite.routes";
+import notificationRoutes from './modules/notification/notification.routes';
 
-import notificationRoutes
-  from "./modules/notification/notification.routes";
+import devRoutes from './modules/dev/dev.routes';
 
-import devRoutes
-  from "./modules/dev/dev.routes";
+import clubRoutes from './modules/club/club.routes';
 
-import clubRoutes
-  from "./modules/club/club.routes";
+import metaRoutes from './modules/meta/meta.routes';
 
-import metaRoutes
-  from "./modules/meta/meta.routes";
-
-import {
-  optionalAuth
-} from "./middleware/auth.middleware";
+import { optionalAuth } from './middleware/auth.middleware';
+import exploreRoutes from './modules/explore/explore.routes';
 
 const app = express();
 
@@ -43,10 +31,12 @@ const app = express();
    CORE
 ====================================================== */
 
-app.use(cors({
-  origin: "*",
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: '*',
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 
@@ -61,60 +51,32 @@ app.use(optionalAuth);
 ====================================================== */
 
 app.use((req: any, res: any, next: any) => {
-
   const start = Date.now();
 
-  console.log("\n==============================");
+  console.log('\n==============================');
 
-  console.log(
-    `API: ${req.method} ${req.originalUrl}`
-  );
+  console.log(`API: ${req.method} ${req.originalUrl}`);
 
-  console.log(
-    "QUERY:",
-    req.query
-  );
+  console.log('QUERY:', req.query);
 
-  console.log(
-    "BODY:",
-    req.body
-  );
+  console.log('BODY:', req.body);
 
-  console.log(
-    "AUTH HEADER:",
-    req.headers.authorization || "none"
-  );
+  console.log('AUTH HEADER:', req.headers.authorization || 'none');
 
-  console.log(
-    "USER:",
-    req.user?.id || "guest"
-  );
+  console.log('USER:', req.user?.id || 'guest');
 
-  console.log(
-    "ROLES:",
-    req.user?.roles || []
-  );
+  console.log('ROLES:', req.user?.roles || []);
 
   const oldJson = res.json;
 
   res.json = function (data: any) {
+    console.log('STATUS:', res.statusCode);
 
-    console.log(
-      "STATUS:",
-      res.statusCode
-    );
+    console.log('RESPONSE:', JSON.stringify(data, null, 2));
 
-    console.log(
-      "RESPONSE:",
-      JSON.stringify(data, null, 2)
-    );
+    console.log('TIME:', `${Date.now() - start}ms`);
 
-    console.log(
-      "TIME:",
-      `${Date.now() - start}ms`
-    );
-
-    console.log("==============================\n");
+    console.log('==============================\n');
 
     return oldJson.call(this, data);
   };
@@ -126,9 +88,9 @@ app.use((req: any, res: any, next: any) => {
    ROOT
 ====================================================== */
 
-app.get("/", (_, res) => {
+app.get('/', (_, res) => {
   res.json({
-    message: "Welcome to Club App API"
+    message: 'Welcome to Club App API',
   });
 });
 
@@ -136,98 +98,52 @@ app.get("/", (_, res) => {
    ROUTES
 ====================================================== */
 
-app.use("/auth", authRoutes);
+app.use('/auth', authRoutes);
 
-/**
- * PUBLIC / USER EVENT APIS
- * GET /events
- * GET /events/:id
- */
-app.use("/events", eventRoutes);
+app.use('/events', eventRoutes);
 
-/**
- * ADMIN EVENT APIS
- * GET /admin/events
- * GET /admin/events/:id
- * POST /admin/events
- * PATCH /admin/events/:id
- */
-app.use("/admin", adminRoutes);
+app.use('/admin', adminRoutes);
 
-/**
- * USER REGISTRATION APIS
- * POST /registrations
- */
-app.use(
-  "/registrations",
-  registrationRoutes
-);
+app.use('/registrations', registrationRoutes);
 
-/**
- * HOST EVENT APIS
- * GET /host/events
- * GET /host/events/:id
- * PATCH /host/events/:id
- */
-app.use("/host", hostRoutes);
+app.use('/host', hostRoutes);
 
-/**
- * CLUB APIS
- */
-app.use("/clubs", clubRoutes);
+app.use('/clubs', clubRoutes);
 
-/**
- * FAVORITE APIS
- * POST /favorites/:eventId
- */
-app.use(
-  "/favorites",
-  favoriteRoutes
-);
+app.use('/favorites', favoriteRoutes);
 
-app.use(
-  "/notifications",
-  notificationRoutes
-);
+app.use('/notifications', notificationRoutes);
 
-app.use("/meta", metaRoutes);
+app.use("/explore", exploreRoutes);
 
-app.use("/dev", devRoutes);
+app.use('/meta', metaRoutes);
+
+app.use('/dev', devRoutes);
 
 /* ======================================================
    ERROR HANDLER
 ====================================================== */
 
-app.use((
-  err: any,
-  req: any,
-  res: any,
-  next: any
-) => {
-
+app.use((err: any, req: any, res: any, next: any) => {
   console.error(err);
 
   if (err instanceof multer.MulterError) {
-
     return res.status(400).json({
       success: false,
-      message: err.message
+      message: err.message,
     });
   }
 
-  if (
-    err.message ===
-    "Only image files allowed"
-  ) {
+  if (err.message === 'Only image files allowed') {
     return res.status(400).json({
       success: false,
-      message: err.message
+      message: err.message,
     });
   }
 
   res.status(500).json({
     success: false,
-    message: "Internal Server Error"
+    message: 'Internal Server Error',
   });
 });
 

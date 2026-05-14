@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const schema = new mongoose.Schema(
   {
@@ -7,30 +7,30 @@ const schema = new mongoose.Schema(
 
     clubId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Club",
+      ref: 'Club',
       required: true,
-      index: true
+      index: true,
     },
 
     cityId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "City",
+      ref: 'City',
       required: true,
-      index: true
+      index: true,
     },
 
     venueId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Venue",
+      ref: 'Venue',
       required: true,
-      index: true
+      index: true,
     },
 
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
+      ref: 'Category',
       required: true,
-      index: true
+      index: true,
     },
 
     startTime: { type: Date, required: true, index: true },
@@ -41,64 +41,64 @@ const schema = new mongoose.Schema(
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User"
+      ref: 'User',
     },
 
     hosts: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        index: true
-      }
+        ref: 'User',
+        index: true,
+      },
     ],
 
     banner: String,
 
     bannerPublicId: String,
 
-  images: [
-  {
-    url: {
-      type: String,
-      required: true
-    },
+    images: [
+      {
+        url: {
+          type: String,
+          required: true,
+        },
 
-    publicId: {
-      type: String,
-      required: true,
-      index: true
-    },
+        publicId: {
+          type: String,
+          required: true,
+          index: true,
+        },
 
-    originalName: String,
+        originalName: String,
 
-    uploadedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User"
-    },
+        uploadedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+        },
 
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
-  }
-],
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
 
     isFeatured: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     },
 
     favoriteCount: {
       type: Number,
       default: 0,
-      index: true
+      index: true,
     },
     trendingScore: {
       type: Number,
       default: 0,
-      index: true
-    }
+      index: true,
+    },
   },
   { timestamps: true }
 );
@@ -109,8 +109,25 @@ schema.index({ isFeatured: 1, startTime: 1 });
 schema.index({ trendingScore: -1 });
 schema.index({ hosts: 1 });
 schema.index({
-  title: "text",
-  desc: "text"
+  title: 'text',
+  desc: 'text',
+});
+schema.index({
+  startTime: 1,
+
+  isFeatured: 1,
 });
 
-export default mongoose.model("Event", schema);
+schema.index({
+  startTime: 1,
+
+  trendingScore: -1,
+});
+
+schema.index({
+  clubId: 1,
+
+  startTime: 1,
+});
+
+export default mongoose.model('Event', schema);
