@@ -96,7 +96,7 @@ export const getEvents = async (req: any, res: any) => {
         .sort(sort)
         .populate('clubId', 'name image')
         .populate('cityId', 'name')
-        .populate('venueId', 'name')
+        .populate('venueId', 'name googleMapsUrl')
         .populate('categoryId', 'name')
         .skip(skip)
         .limit(limit)
@@ -610,7 +610,7 @@ export const getMyEvents = async (req: any, res: any) => {
       hosts: req.user.id,
     })
       .populate('clubId', 'name image')
-      .populate('venueId', 'name')
+      .populate('venueId', 'name googleMapsUrl')
       .populate('cityId', 'name')
       .populate('categoryId', 'name')
       .populate('hosts', 'name image')
@@ -773,7 +773,7 @@ export const getEventById = async (req: any, res: any) => {
     const event = await Event.findById(id)
       .populate('clubId', 'name image banner')
       .populate('cityId', 'name')
-      .populate('venueId', 'name')
+      .populate('venueId', 'name googleMapsUrl')
       .populate('categoryId', 'name')
       .populate('hosts', 'name image instagramId')
       .lean();
